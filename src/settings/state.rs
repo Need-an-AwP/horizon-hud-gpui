@@ -141,6 +141,73 @@ impl Settings {
             },
         )
         .detach();
+        let (gear_display_x, gear_display_y) = hud::gear_display_position_ratio();
+        let gear_display_x_slider = cx.new(|_| {
+            SliderState::new()
+                .min(0.0)
+                .max(100.0)
+                .step(0.5)
+                .default_value(gear_display_x * 100.0)
+        });
+        let gear_display_y_slider = cx.new(|_| {
+            SliderState::new()
+                .min(0.0)
+                .max(100.0)
+                .step(0.5)
+                .default_value(gear_display_y * 100.0)
+        });
+        for slider in [&gear_display_x_slider, &gear_display_y_slider] {
+            cx.subscribe(slider, |this, _slider, _event: &SliderEvent, cx| {
+                let x = match this.gear_display_x_slider.read(cx).value() {
+                    SliderValue::Single(value) => value,
+                    SliderValue::Range(start, _) => start,
+                };
+                let y = match this.gear_display_y_slider.read(cx).value() {
+                    SliderValue::Single(value) => value,
+                    SliderValue::Range(start, _) => start,
+                };
+                let _ = hud::set_gear_display_position_ratio(x / 100.0, y / 100.0);
+                cx.notify();
+            })
+            .detach();
+        }
+        let gear_display_size_input = cx.new(|cx| {
+            InputState::new(window, cx).default_value(hud::gear_display_size_px().to_string())
+        });
+        let gear_display_lit_opacity_slider = cx.new(|_| {
+            SliderState::new()
+                .min(0.0)
+                .max(1.0)
+                .step(0.05)
+                .default_value(hud::gear_display_lit_opacity())
+        });
+        cx.subscribe(
+            &gear_display_lit_opacity_slider,
+            |_this, _slider, event: &SliderEvent, cx| {
+                if let SliderEvent::Change(SliderValue::Single(opacity)) = event {
+                    let _ = hud::set_gear_display_lit_opacity(*opacity);
+                    cx.notify();
+                }
+            },
+        )
+        .detach();
+        let gear_display_dim_opacity_slider = cx.new(|_| {
+            SliderState::new()
+                .min(0.0)
+                .max(1.0)
+                .step(0.05)
+                .default_value(hud::gear_display_dim_opacity())
+        });
+        cx.subscribe(
+            &gear_display_dim_opacity_slider,
+            |_this, _slider, event: &SliderEvent, cx| {
+                if let SliderEvent::Change(SliderValue::Single(opacity)) = event {
+                    let _ = hud::set_gear_display_dim_opacity(*opacity);
+                    cx.notify();
+                }
+            },
+        )
+        .detach();
         Self {
             appearance_override: None,
             selected_section: initial_section,
@@ -160,6 +227,11 @@ impl Settings {
             shift_lights_gap_input,
             shift_lights_width_slider,
             shift_lights_blink_slider,
+            gear_display_x_slider,
+            gear_display_y_slider,
+            gear_display_size_input,
+            gear_display_lit_opacity_slider,
+            gear_display_dim_opacity_slider,
         }
     }
 
@@ -219,7 +291,11 @@ impl Settings {
     }
 
     fn should_force_hud(section: SettingsSection, window_active: bool) -> bool {
-        window_active && matches!(section, SettingsSection::Hud | SettingsSection::ShiftLights)
+        window_active
+            && matches!(
+                section,
+                SettingsSection::Hud | SettingsSection::ShiftLights | SettingsSection::GearDisplay
+            )
     }
 
     fn sync_force_hud_visible(&self, window: &Window) {

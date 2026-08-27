@@ -1,4 +1,4 @@
-use gpui::{Context, IntoElement, colors::Colors, div, prelude::*, px};
+use gpui::{Context, IntoElement, colors::Colors, div, prelude::*, px, rgb};
 use gpui_component::{Icon, Sizable, StyledExt};
 
 use crate::hud;
@@ -8,14 +8,16 @@ use super::Settings;
 
 impl Settings {
     pub(super) fn overview(&self, colors: &Colors, _cx: &mut Context<Self>) -> impl IntoElement {
-        let (listener_state, listener_detail) = if let Some(error) = telemetry::listen_error() {
-            ("监听异常", error)
-        } else {
-            (
-                "正在监听",
-                format!("UDP · {}", telemetry::listen_addr_display()),
-            )
-        };
+        let (listener_state, listener_detail, listener_color) =
+            if let Some(error) = telemetry::listen_error() {
+                ("监听异常", error, rgb(0xff3333))
+            } else {
+                (
+                    "正在监听",
+                    format!("UDP · {}", telemetry::listen_addr_display()),
+                    rgb(0x22cc44),
+                )
+            };
         let calibrated = hud::shift_lights_calibrated();
 
         div()
@@ -49,18 +51,19 @@ impl Settings {
                     .child(
                         div()
                             .flex()
-                            .gap_3()
+                            .gap_5()
                             .child(self.status_card(
                                 "overview-telemetry-status",
                                 "遥测监听",
                                 listener_state,
                                 &listener_detail,
-                                "icons/gauge.svg",
+                                listener_color,
+                                "icons/braces.svg",
                                 colors,
                             ))
                             .child(self.status_card(
                                 "overview-calibration-status",
-                                "换挡灯校准",
+                                "换挡指示校准",
                                 if calibrated {
                                     "已完成"
                                 } else {
@@ -71,7 +74,12 @@ impl Settings {
                                 } else {
                                     "同时按下手刹和油门，等待转速上升完成校准"
                                 },
-                                "icons/sliders-horizontal.svg",
+                                if calibrated {
+                                    rgb(0x22cc44)
+                                } else {
+                                    rgb(0xffcc22)
+                                },
+                                "icons/gauge.svg",
                                 colors,
                             )),
                     )
@@ -136,6 +144,7 @@ impl Settings {
         label: &'static str,
         value: &'static str,
         detail: &str,
+        value_color: gpui::Rgba,
         icon_path: &'static str,
         colors: &Colors,
     ) -> impl IntoElement {
@@ -173,7 +182,13 @@ impl Settings {
                             ),
                     ),
             )
-            .child(div().text_lg().font_medium().child(value))
+            .child(
+                div()
+                    .text_lg()
+                    .font_medium()
+                    .text_color(value_color)
+                    .child(value),
+            )
             .child(
                 div()
                     .min_h(px(32.))

@@ -55,6 +55,11 @@ impl Render for Settings {
                                 &colors,
                                 cx,
                             ))
+                            .child(self.section_navigation(
+                                SettingsSection::GearDisplay,
+                                &colors,
+                                cx,
+                            ))
                             .child(self.section_navigation(SettingsSection::Telemetry, &colors, cx))
                             .child(self.section_navigation(
                                 SettingsSection::Calibration,

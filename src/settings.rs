@@ -12,6 +12,7 @@ const OPEN_SHIFT_LIGHTS: u8 = 2;
 
 static OPEN_REQUEST: AtomicU8 = AtomicU8::new(OPEN_IDLE);
 
+mod about;
 mod actions;
 mod controls;
 mod hud_display;
@@ -40,6 +41,11 @@ pub(crate) struct Settings {
     shift_lights_gap_input: Entity<InputState>,
     shift_lights_width_slider: Entity<SliderState>,
     shift_lights_blink_slider: Entity<SliderState>,
+    gear_display_x_slider: Entity<SliderState>,
+    gear_display_y_slider: Entity<SliderState>,
+    gear_display_size_input: Entity<InputState>,
+    gear_display_lit_opacity_slider: Entity<SliderState>,
+    gear_display_dim_opacity_slider: Entity<SliderState>,
 }
 
 pub(crate) fn request_open() {

@@ -3,6 +3,7 @@ pub(super) enum SettingsSection {
     Overview,
     Hud,
     ShiftLights,
+    GearDisplay,
     Telemetry,
     Calibration,
     About,
@@ -13,7 +14,8 @@ impl SettingsSection {
         match self {
             Self::Overview => "概览",
             Self::Hud => "HUD 显示",
-            Self::ShiftLights => "换挡指示",
+            Self::ShiftLights => "转速指示",
+            Self::GearDisplay => "挡位显示",
             Self::Telemetry => "遥测数据",
             Self::Calibration => "校准",
             Self::About => "关于",
@@ -24,9 +26,10 @@ impl SettingsSection {
         match self {
             Self::Overview => "管理 Horizon HUD 的常用选项与运行状态。",
             Self::Hud => "配置 HUD 的显示条件与图表可见性。",
-            Self::ShiftLights => "按位置、尺寸和显示效果配置换挡指示灯。",
+            Self::ShiftLights => "按位置、尺寸和显示效果配置转速指示灯。",
+            Self::GearDisplay => "调整七段数码管挡位显示的位置、大小和透明度。",
             Self::Telemetry => "配置 UDP 遥测监听地址和端口。",
-            Self::Calibration => "配置换挡指示灯校准时长与提示样式。",
+            Self::Calibration => "配置转速指示灯校准时长与提示样式。",
             Self::About => "查看应用信息、版本与支持资源。",
         }
     }
@@ -36,6 +39,7 @@ impl SettingsSection {
             Self::Overview => "icons/layout-dashboard.svg",
             Self::Hud => "icons/monitor.svg",
             Self::ShiftLights => "icons/sliders-horizontal.svg",
+            Self::GearDisplay => "icons/cog.svg",
             Self::Telemetry => "icons/gauge.svg",
             Self::Calibration => "icons/timer.svg",
             Self::About => "icons/info.svg",
@@ -47,9 +51,10 @@ impl SettingsSection {
             Self::Overview => 0,
             Self::Hud => 1,
             Self::ShiftLights => 2,
-            Self::Telemetry => 3,
-            Self::Calibration => 4,
-            Self::About => 5,
+            Self::GearDisplay => 3,
+            Self::Telemetry => 4,
+            Self::Calibration => 5,
+            Self::About => 6,
         }
     }
 
@@ -69,6 +74,14 @@ impl SettingsSection {
                 ("位置与方向", "选择转速灯在屏幕边缘的位置和点亮方向。"),
                 ("尺寸与布局", "设置整体宽度、灯条厚度、灯格间隔和边缘偏移。"),
                 ("显示效果", "设置闪烁阈值，以及亮起与熄灭状态的透明度。"),
+            ],
+            Self::GearDisplay => [
+                (
+                    "显示位置",
+                    "使用 X, Y 坐标将挡位显示放置在屏幕上的指定位置。",
+                ),
+                ("大小", "调整七段数码管的高度。"),
+                ("透明度", "调整挡位显示整体的不透明程度。"),
             ],
             Self::Telemetry => [
                 ("数据源", "选择遥测协议和连接方式。"),

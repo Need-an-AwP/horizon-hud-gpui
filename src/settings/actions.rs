@@ -30,6 +30,11 @@ impl Settings {
         cx.notify();
     }
 
+    pub(super) fn set_gear_display_visible(&mut self, visible: bool, cx: &mut Context<Self>) {
+        hud::set_gear_display_visible(visible);
+        cx.notify();
+    }
+
     pub(super) fn set_shift_lights_position(
         &mut self,
         position: ShiftLightsPosition,
@@ -75,6 +80,14 @@ impl Settings {
         let value = self.calibrate_ms_input.read(cx).value().to_string();
         if let Ok(ms) = value.trim().parse::<usize>() {
             let _ = hud::set_calibrate_ms(ms);
+        }
+        cx.notify();
+    }
+
+    pub(super) fn apply_gear_display_size(&mut self, cx: &mut Context<Self>) {
+        let value = self.gear_display_size_input.read(cx).value().to_string();
+        if let Ok(size) = value.trim().parse::<usize>() {
+            let _ = hud::set_gear_display_size_px(size);
         }
         cx.notify();
     }

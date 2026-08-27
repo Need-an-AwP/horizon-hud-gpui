@@ -1,4 +1,6 @@
-use gpui::{Context, Entity, IntoElement, Window, colors::Colors, div, prelude::*, px, rgb};
+use gpui::{
+    Context, Entity, IntoElement, Window, colors::Colors, div, prelude::*, px, relative, rgb,
+};
 use gpui_component::{
     Icon, IconName, Sizable, Size, StyledExt,
     button::{Button, ButtonVariants},
@@ -168,6 +170,33 @@ impl Settings {
             }))
     }
 
+    pub(super) fn warning_hint(text: &'static str) -> gpui::Div {
+        let warning_color = rgb(0xffaa33);
+        div()
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap_1()
+            .text_xs()
+            .line_height(relative(1.))
+            .text_color(warning_color)
+            .child(
+                div()
+                    .flex()
+                    .flex_none()
+                    .items_center()
+                    .justify_center()
+                    .size(px(12.))
+                    .child(
+                        Icon::empty()
+                            .path("icons/triangle-alert.svg")
+                            .with_size(px(12.))
+                            .text_color(warning_color),
+                    ),
+            )
+            .child(text)
+    }
+
     pub(super) fn setting_row_with_reset(
         &self,
         colors: &Colors,
@@ -176,6 +205,7 @@ impl Settings {
         reset_id: &'static str,
         control: impl IntoElement,
         show_reset: bool,
+        warning: Option<&'static str>,
         cx: &mut Context<Self>,
         on_reset: impl Fn(&mut Self, &mut Window, &mut Context<Self>) + 'static,
     ) -> gpui::Div {
@@ -210,7 +240,8 @@ impl Settings {
                             .text_xs()
                             .text_color(colors.disabled)
                             .child(description),
-                    ),
+                    )
+                    .when_some(warning, |el, text| el.child(Self::warning_hint(text))),
             )
             .child(control)
     }
@@ -233,7 +264,6 @@ impl Settings {
             SliderValue::Single(value) => value,
             SliderValue::Range(start, _) => start,
         };
-        let warning_color = rgb(0xffaa33);
         let value_label = format!("{value:.prec$}{suffix}", prec = decimal_places);
         div()
             .flex()
@@ -259,24 +289,6 @@ impl Settings {
                             .child(div().text_sm().child(title))
                             .when(show_reset, |el| {
                                 el.child(self.reset_icon_button(reset_id, cx, on_reset))
-                            })
-                            .when_some(warning, |el, text| {
-                                el.child(
-                                    div()
-                                        .ml_1()
-                                        .flex()
-                                        .items_center()
-                                        .gap_1()
-                                        .text_xs()
-                                        .text_color(warning_color)
-                                        .child(
-                                            Icon::empty()
-                                                .path("icons/triangle-alert.svg")
-                                                .with_size(px(12.))
-                                                .text_color(warning_color),
-                                        )
-                                        .child(text),
-                                )
                             }),
                     )
                     .child(
@@ -284,7 +296,8 @@ impl Settings {
                             .text_xs()
                             .text_color(colors.disabled)
                             .child(description),
-                    ),
+                    )
+                    .when_some(warning, |el, text| el.child(Self::warning_hint(text))),
             )
             .child(
                 div()

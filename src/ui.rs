@@ -21,8 +21,7 @@ fn signed_history_chart(
             paint_ranged_history_line(&samples, bounds, min, max, line_color, window);
         },
     )
-    .w_full()
-    .flex_1()
+    .size_full()
 }
 
 fn signed_range(samples: &[f32], current: f32) -> (f32, f32) {
@@ -76,8 +75,32 @@ fn history_chart(
             paint_ranged_history_line(&samples, bounds, min, max, color, window);
         },
     )
-    .w_full()
-    .flex_1()
+    .size_full()
+}
+
+fn chart_with_center_label(
+    chart: impl IntoElement,
+    label: impl IntoElement,
+    color: gpui::Rgba,
+) -> gpui::Div {
+    div()
+        .relative()
+        .flex()
+        .flex_col()
+        .flex_1()
+        .w_full()
+        .min_h_0()
+        .child(div().flex_1().w_full().min_h_0().child(chart))
+        .child(
+            div()
+                .absolute()
+                .inset_0()
+                .flex()
+                .items_center()
+                .justify_center()
+                .text_color(color)
+                .child(label),
+        )
 }
 
 fn value_y(value: f32, min: f32, max: f32, bounds: gpui::Bounds<gpui::Pixels>) -> gpui::Pixels {
@@ -107,6 +130,153 @@ const RPM_LIGHT_BLINK_MS: u128 = 80;
 const RPM_LIGHT_COLORS: [u32; RPM_LIGHT_COUNT] = [0x22cc44, 0x22cc44, 0xffcc22, 0xffcc22, 0xff3333];
 const RPM_LIGHT_UNCALIBRATED: u32 = 0xffcc22;
 const RPM_LIGHT_CALIBRATING: u32 = 0x22cc44;
+const SEGMENT_DIM_COLOR: u32 = 0xffffff;
+const SEGMENT_LIT_COLOR: u32 = 0xff3333;
+const REVERSE_SEGMENT_LIT_COLOR: u32 = 0xffcc22;
+const SEGMENT_A: u8 = 1 << 0;
+const SEGMENT_B: u8 = 1 << 1;
+const SEGMENT_C: u8 = 1 << 2;
+const SEGMENT_D: u8 = 1 << 3;
+const SEGMENT_E: u8 = 1 << 4;
+const SEGMENT_F: u8 = 1 << 5;
+const SEGMENT_G: u8 = 1 << 6;
+
+fn seven_segment_mask(character: char) -> u8 {
+    match character {
+        '0' => SEGMENT_A | SEGMENT_B | SEGMENT_C | SEGMENT_D | SEGMENT_E | SEGMENT_F,
+        '1' => SEGMENT_B | SEGMENT_C,
+        '2' => SEGMENT_A | SEGMENT_B | SEGMENT_D | SEGMENT_E | SEGMENT_G,
+        '3' => SEGMENT_A | SEGMENT_B | SEGMENT_C | SEGMENT_D | SEGMENT_G,
+        '4' => SEGMENT_B | SEGMENT_C | SEGMENT_F | SEGMENT_G,
+        '5' => SEGMENT_A | SEGMENT_C | SEGMENT_D | SEGMENT_F | SEGMENT_G,
+        '6' => SEGMENT_A | SEGMENT_C | SEGMENT_D | SEGMENT_E | SEGMENT_F | SEGMENT_G,
+        '7' => SEGMENT_A | SEGMENT_B | SEGMENT_C,
+        '8' => SEGMENT_A | SEGMENT_B | SEGMENT_C | SEGMENT_D | SEGMENT_E | SEGMENT_F | SEGMENT_G,
+        '9' => SEGMENT_A | SEGMENT_B | SEGMENT_C | SEGMENT_D | SEGMENT_F | SEGMENT_G,
+        'N' => SEGMENT_B | SEGMENT_C | SEGMENT_E | SEGMENT_F,
+        'r' => SEGMENT_A | SEGMENT_E | SEGMENT_F,
+        '-' => SEGMENT_G,
+        _ => 0,
+    }
+}
+
+fn seven_segment_lit_color(character: char) -> u32 {
+    if character == 'r' {
+        REVERSE_SEGMENT_LIT_COLOR
+    } else {
+        SEGMENT_LIT_COLOR
+    }
+}
+
+fn seven_segment_digit(
+    character: char,
+    size: f32,
+    lit_opacity: f32,
+    dim_opacity: f32,
+) -> gpui::Div {
+    let thickness = (size * 0.12).max(2.0);
+    let width = size * 0.62;
+    let height = size;
+    let vertical_height = height / 2.0 - thickness;
+    let mask = seven_segment_mask(character);
+    let lit_color = seven_segment_lit_color(character);
+    let active = |segment| mask & segment != 0;
+    let segment = |enabled| {
+        div().rounded_sm().bg(with_opacity(
+            if enabled {
+                lit_color
+            } else {
+                SEGMENT_DIM_COLOR
+            },
+            if enabled { lit_opacity } else { dim_opacity },
+        ))
+    };
+
+    div()
+        .relative()
+        .w(px(width))
+        .h(px(height))
+        .child(
+            segment(active(SEGMENT_A))
+                .absolute()
+                .top_0()
+                .left(px(thickness / 2.0))
+                .w(px(width - thickness))
+                .h(px(thickness)),
+        )
+        .child(
+            segment(active(SEGMENT_G))
+                .absolute()
+                .top(px(height / 2.0 - thickness / 2.0))
+                .left(px(thickness / 2.0))
+                .w(px(width - thickness))
+                .h(px(thickness)),
+        )
+        .child(
+            segment(active(SEGMENT_D))
+                .absolute()
+                .bottom_0()
+                .left(px(thickness / 2.0))
+                .w(px(width - thickness))
+                .h(px(thickness)),
+        )
+        .child(
+            segment(active(SEGMENT_F))
+                .absolute()
+                .top(px(thickness / 2.0))
+                .left_0()
+                .w(px(thickness))
+                .h(px(vertical_height)),
+        )
+        .child(
+            segment(active(SEGMENT_B))
+                .absolute()
+                .top(px(thickness / 2.0))
+                .right_0()
+                .w(px(thickness))
+                .h(px(vertical_height)),
+        )
+        .child(
+            segment(active(SEGMENT_E))
+                .absolute()
+                .bottom(px(thickness / 2.0))
+                .left_0()
+                .w(px(thickness))
+                .h(px(vertical_height)),
+        )
+        .child(
+            segment(active(SEGMENT_C))
+                .absolute()
+                .bottom(px(thickness / 2.0))
+                .right_0()
+                .w(px(thickness))
+                .h(px(vertical_height)),
+        )
+}
+
+fn gear_display(
+    value: &str,
+    size: f32,
+    lit_opacity: f32,
+    dim_opacity: f32,
+    x: f32,
+    y: f32,
+) -> gpui::Div {
+    let width = value.chars().count() as f32 * size * 0.62
+        + value.chars().count().saturating_sub(1) as f32 * size * 0.12;
+    div()
+        .absolute()
+        .left(relative(x))
+        .top(relative(y))
+        .ml(px(-width / 2.0))
+        .flex()
+        .gap(px(size * 0.12))
+        .children(
+            value.chars().map(move |character| {
+                seven_segment_digit(character, size, lit_opacity, dim_opacity)
+            }),
+        )
+}
 
 fn shift_blink_on() -> bool {
     std::time::SystemTime::now()
@@ -356,6 +526,8 @@ impl Render for RpmHud {
         let lights_gap = self.shift_lights_gap_px() as f32;
         let lights_width = relative(self.shift_lights_width_percent() as f32 / 100.0);
         let lights_blink_frac = self.shift_lights_blink_percent() / 100.0;
+        let (gear_display_x, gear_display_y) = self.gear_display_position_ratio();
+        let gear = self.gear_display();
         let lights_vertical = matches!(
             lights_position,
             ShiftLightsPosition::Left | ShiftLightsPosition::Right
@@ -423,34 +595,27 @@ impl Render for RpmHud {
                         .w_1_2()
                         .mx_auto()
                         .flex_1()
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .flex_1()
-                                .gap_1()
-                                .child(div().text_color(torque_color).child(torque_label))
-                                .child(signed_history_chart(
-                                    torque_samples,
-                                    self.torque(),
-                                    torque_color,
-                                    zero_line_color,
-                                )),
-                        )
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .flex_1()
-                                .gap_1()
-                                .child(div().text_color(power_color).child(power_label))
-                                .child(signed_history_chart(
-                                    power_samples,
-                                    self.power(),
-                                    power_color,
-                                    zero_line_color,
-                                )),
-                        ),
+                        .min_h_0()
+                        .child(chart_with_center_label(
+                            signed_history_chart(
+                                torque_samples,
+                                self.torque(),
+                                torque_color,
+                                zero_line_color,
+                            ),
+                            torque_label,
+                            torque_color,
+                        ))
+                        .child(chart_with_center_label(
+                            signed_history_chart(
+                                power_samples,
+                                self.power(),
+                                power_color,
+                                zero_line_color,
+                            ),
+                            power_label,
+                            power_color,
+                        )),
                 )
                 .child(
                     div()
@@ -459,18 +624,31 @@ impl Render for RpmHud {
                         .w_1_2()
                         .mx_auto()
                         .flex_1()
-                        .gap_1()
-                        .child(div().text_color(rpm_color).child(rpm_label))
-                        .child(history_chart(
-                            rpm_samples,
-                            self.rpm(),
+                        .min_h_0()
+                        .child(chart_with_center_label(
+                            history_chart(
+                                rpm_samples,
+                                self.rpm(),
+                                rpm_color,
+                                self.fuel_cut_rpm(),
+                                zero_line_color,
+                            ),
+                            rpm_label,
                             rpm_color,
-                            self.fuel_cut_rpm(),
-                            zero_line_color,
                         )),
                 )
             })
             .child(lights)
+            .when(self.gear_display_visible(), |el| {
+                el.child(gear_display(
+                    &gear,
+                    self.gear_display_size_px() as f32,
+                    self.gear_display_lit_opacity(),
+                    self.gear_display_dim_opacity(),
+                    gear_display_x,
+                    gear_display_y,
+                ))
+            })
             .when_some(calibrate_hint, |el, hint| {
                 el.child(
                     div()

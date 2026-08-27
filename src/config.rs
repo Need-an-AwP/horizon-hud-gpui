@@ -29,6 +29,14 @@ pub(crate) const DEFAULT_SHIFT_LIGHTS_BLINK_PERCENT: f32 = 95.0;
 pub(crate) const SHIFT_LIGHTS_BLINK_PERCENT_MIN: f32 = 80.0;
 pub(crate) const SHIFT_LIGHTS_BLINK_PERCENT_MAX: f32 = 100.0;
 
+// Gear display
+pub(crate) const CURRENT_GEAR_OFFSET: usize = 319;
+pub(crate) const DEFAULT_GEAR_DISPLAY_X_RATIO: f32 = 0.5;
+pub(crate) const DEFAULT_GEAR_DISPLAY_Y_RATIO: f32 = 0.075;
+pub(crate) const DEFAULT_GEAR_DISPLAY_SIZE_PX: usize = 64;
+pub(crate) const DEFAULT_GEAR_DISPLAY_LIT_OPACITY: f32 = 1.0;
+pub(crate) const DEFAULT_GEAR_DISPLAY_DIM_OPACITY: f32 = 0.12;
+
 // Fuel-cut detection / calibration
 pub(crate) const FUEL_CUT_WINDOW: usize = SAMPLE_HZ * 700 / 1000;
 pub(crate) const RPM_REVERSAL_FLOOR: f32 = 40.0;

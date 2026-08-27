@@ -5,6 +5,8 @@ use gpui::{Context, Timer};
 
 use crate::config::{
     CALIBRATE_MS_MAX, CALIBRATE_MS_MIN, CALIBRATE_PEAK_HOLD_FRAMES, DEFAULT_CALIBRATE_MS,
+    DEFAULT_GEAR_DISPLAY_DIM_OPACITY, DEFAULT_GEAR_DISPLAY_LIT_OPACITY,
+    DEFAULT_GEAR_DISPLAY_SIZE_PX, DEFAULT_GEAR_DISPLAY_X_RATIO, DEFAULT_GEAR_DISPLAY_Y_RATIO,
     DEFAULT_SHIFT_LIGHTS_BLINK_PERCENT, DEFAULT_SHIFT_LIGHTS_DIM_OPACITY,
     DEFAULT_SHIFT_LIGHTS_GAP_PX, DEFAULT_SHIFT_LIGHTS_LIT_OPACITY, DEFAULT_SHIFT_LIGHTS_OFFSET_PX,
     DEFAULT_SHIFT_LIGHTS_THICKNESS_PX, DEFAULT_SHIFT_LIGHTS_WIDTH_PERCENT, FUEL_CUT_WINDOW,
@@ -34,6 +36,14 @@ static CALIBRATE_PROGRESS_DIRECTION: AtomicU8 = AtomicU8::new(2);
 static CALIBRATE_MS: AtomicUsize = AtomicUsize::new(DEFAULT_CALIBRATE_MS);
 static FORCE_HUD_VISIBLE: AtomicBool = AtomicBool::new(false);
 static SHIFT_LIGHTS_CALIBRATED: AtomicBool = AtomicBool::new(false);
+static GEAR_DISPLAY_X_RATIO: AtomicU32 = AtomicU32::new(DEFAULT_GEAR_DISPLAY_X_RATIO.to_bits());
+static GEAR_DISPLAY_Y_RATIO: AtomicU32 = AtomicU32::new(DEFAULT_GEAR_DISPLAY_Y_RATIO.to_bits());
+static GEAR_DISPLAY_SIZE_PX: AtomicUsize = AtomicUsize::new(DEFAULT_GEAR_DISPLAY_SIZE_PX);
+static GEAR_DISPLAY_VISIBLE: AtomicBool = AtomicBool::new(true);
+static GEAR_DISPLAY_LIT_OPACITY: AtomicU32 =
+    AtomicU32::new(DEFAULT_GEAR_DISPLAY_LIT_OPACITY.to_bits());
+static GEAR_DISPLAY_DIM_OPACITY: AtomicU32 =
+    AtomicU32::new(DEFAULT_GEAR_DISPLAY_DIM_OPACITY.to_bits());
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum CalibrateProgressDirection {
@@ -280,6 +290,58 @@ fn set_shift_lights_opacity(target: &AtomicU32, opacity: f32) -> Result<f32, Str
     Ok(opacity)
 }
 
+pub(crate) fn gear_display_position_ratio() -> (f32, f32) {
+    (
+        f32::from_bits(GEAR_DISPLAY_X_RATIO.load(Ordering::Relaxed)),
+        f32::from_bits(GEAR_DISPLAY_Y_RATIO.load(Ordering::Relaxed)),
+    )
+}
+
+pub(crate) fn set_gear_display_position_ratio(x: f32, y: f32) -> Result<(), String> {
+    if !x.is_finite() || !y.is_finite() || !(0.0..=1.0).contains(&x) || !(0.0..=1.0).contains(&y) {
+        return Err("挡位显示位置必须是 0 到 1 之间的比例。".into());
+    }
+    GEAR_DISPLAY_X_RATIO.store(x.to_bits(), Ordering::Relaxed);
+    GEAR_DISPLAY_Y_RATIO.store(y.to_bits(), Ordering::Relaxed);
+    Ok(())
+}
+
+pub(crate) fn gear_display_size_px() -> usize {
+    GEAR_DISPLAY_SIZE_PX.load(Ordering::Relaxed)
+}
+
+pub(crate) fn set_gear_display_size_px(size: usize) -> Result<usize, String> {
+    if size == 0 {
+        return Err("挡位显示大小必须是大于 0 的整数。".into());
+    }
+    GEAR_DISPLAY_SIZE_PX.store(size, Ordering::Relaxed);
+    Ok(size)
+}
+
+pub(crate) fn gear_display_visible() -> bool {
+    GEAR_DISPLAY_VISIBLE.load(Ordering::Relaxed)
+}
+
+pub(crate) fn set_gear_display_visible(visible: bool) {
+    GEAR_DISPLAY_VISIBLE.store(visible, Ordering::Relaxed);
+}
+
+pub(crate) fn gear_display_lit_opacity() -> f32 {
+    f32::from_bits(GEAR_DISPLAY_LIT_OPACITY.load(Ordering::Relaxed))
+}
+
+pub(crate) fn set_gear_display_lit_opacity(opacity: f32) -> Result<f32, String> {
+    set_shift_lights_opacity(&GEAR_DISPLAY_LIT_OPACITY, opacity)
+}
+
+pub(crate) fn gear_display_dim_opacity() -> f32 {
+    f32::from_bits(GEAR_DISPLAY_DIM_OPACITY.load(Ordering::Relaxed))
+}
+
+pub(crate) fn set_gear_display_dim_opacity(opacity: f32) -> Result<f32, String> {
+    set_shift_lights_opacity(&GEAR_DISPLAY_DIM_OPACITY, opacity)
+}
+
 pub(crate) fn calibrate_progress_direction() -> CalibrateProgressDirection {
     CalibrateProgressDirection::from_u8(CALIBRATE_PROGRESS_DIRECTION.load(Ordering::Relaxed))
 }
@@ -314,6 +376,7 @@ pub(crate) struct RpmHud {
     power: f32,
     accel: u8,
     handbrake: u8,
+    current_gear: Option<u8>,
     has_data: bool,
     car_id: Option<CarId>,
     fuel_cut_rpm: Option<f32>,
@@ -335,6 +398,7 @@ impl RpmHud {
             power: 0.0,
             accel: 0,
             handbrake: 0,
+            current_gear: None,
             has_data: false,
             car_id: None,
             fuel_cut_rpm: None,
@@ -365,6 +429,35 @@ impl RpmHud {
 
     pub(crate) fn power(&self) -> f32 {
         self.power
+    }
+
+    pub(crate) fn gear_display(&self) -> String {
+        match self.current_gear {
+            None => "--".into(),
+            Some(0) => "r".into(),
+            Some(gear) if gear >= 11 => "N".into(),
+            Some(gear) => gear.to_string(),
+        }
+    }
+
+    pub(crate) fn gear_display_position_ratio(&self) -> (f32, f32) {
+        gear_display_position_ratio()
+    }
+
+    pub(crate) fn gear_display_size_px(&self) -> usize {
+        gear_display_size_px()
+    }
+
+    pub(crate) fn gear_display_visible(&self) -> bool {
+        gear_display_visible()
+    }
+
+    pub(crate) fn gear_display_lit_opacity(&self) -> f32 {
+        gear_display_lit_opacity()
+    }
+
+    pub(crate) fn gear_display_dim_opacity(&self) -> f32 {
+        gear_display_dim_opacity()
     }
 
     pub(crate) fn fuel_cut_rpm(&self) -> Option<f32> {
@@ -456,6 +549,7 @@ impl RpmHud {
         self.torque = sample.torque;
         self.accel = sample.accel;
         self.handbrake = sample.handbrake;
+        self.current_gear = Some(sample.current_gear);
         self.has_data = true;
         self.rpm_history.push(sample.rpm);
         self.power_history.push(sample.power);
@@ -527,6 +621,7 @@ impl RpmHud {
         self.rpm_history.clear();
         self.power_history.clear();
         self.torque_history.clear();
+        self.current_gear = None;
     }
 }
 
@@ -547,6 +642,11 @@ fn start_sample_pump(cx: &mut Context<RpmHud>) {
         let mut last_calibrate_direction = calibrate_progress_direction();
         let mut last_listen_generation = crate::telemetry::listen_generation();
         let mut last_calibrate_ms = calibrate_ms();
+        let mut last_gear_display_position = gear_display_position_ratio();
+        let mut last_gear_display_size = gear_display_size_px();
+        let mut last_gear_display_visible = gear_display_visible();
+        let mut last_gear_display_lit_opacity = gear_display_lit_opacity();
+        let mut last_gear_display_dim_opacity = gear_display_dim_opacity();
         loop {
             let samples = {
                 let mut queue = queue.lock().unwrap();
@@ -566,6 +666,11 @@ fn start_sample_pump(cx: &mut Context<RpmHud>) {
             let calibrate_direction = calibrate_progress_direction();
             let listen_generation = crate::telemetry::listen_generation();
             let current_calibrate_ms = calibrate_ms();
+            let gear_display_position = gear_display_position_ratio();
+            let gear_display_size = gear_display_size_px();
+            let gear_display_visible = gear_display_visible();
+            let gear_display_lit_opacity = gear_display_lit_opacity();
+            let gear_display_dim_opacity = gear_display_dim_opacity();
             if !samples.is_empty()
                 || show_charts != last_charts
                 || calibrate_hint != last_calibrate_hint_visible
@@ -581,6 +686,11 @@ fn start_sample_pump(cx: &mut Context<RpmHud>) {
                 || calibrate_direction != last_calibrate_direction
                 || listen_generation != last_listen_generation
                 || current_calibrate_ms != last_calibrate_ms
+                || gear_display_position != last_gear_display_position
+                || gear_display_size != last_gear_display_size
+                || gear_display_visible != last_gear_display_visible
+                || gear_display_lit_opacity != last_gear_display_lit_opacity
+                || gear_display_dim_opacity != last_gear_display_dim_opacity
             {
                 last_charts = show_charts;
                 last_calibrate_hint_visible = calibrate_hint;
@@ -596,6 +706,11 @@ fn start_sample_pump(cx: &mut Context<RpmHud>) {
                 last_calibrate_direction = calibrate_direction;
                 last_listen_generation = listen_generation;
                 last_calibrate_ms = current_calibrate_ms;
+                last_gear_display_position = gear_display_position;
+                last_gear_display_size = gear_display_size;
+                last_gear_display_visible = gear_display_visible;
+                last_gear_display_lit_opacity = gear_display_lit_opacity;
+                last_gear_display_dim_opacity = gear_display_dim_opacity;
                 this.update(cx, |this, cx| {
                     for sample in samples {
                         this.apply(sample);

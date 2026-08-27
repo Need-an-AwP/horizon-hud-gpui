@@ -7,6 +7,7 @@ edition = "2024"
 gpui = "0.2.2"
 gpui-component = "0.5.1"
 rust-embed = "8"
+webbrowser = "1.2.4"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 raw-window-handle = "0.6"

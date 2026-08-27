@@ -104,6 +104,7 @@ impl Settings {
                     "shift-lights-thickness-reset",
                     thickness_control,
                     hud::shift_lights_thickness_px() != DEFAULT_SHIFT_LIGHTS_THICKNESS_PX,
+                    None,
                     cx,
                     |this, window, cx| this.reset_shift_lights_thickness(window, cx),
                 ))
@@ -114,6 +115,7 @@ impl Settings {
                     "shift-lights-gap-reset",
                     gap_control,
                     hud::shift_lights_gap_px() != DEFAULT_SHIFT_LIGHTS_GAP_PX,
+                    None,
                     cx,
                     |this, window, cx| this.reset_shift_lights_gap(window, cx),
                 ))
@@ -124,6 +126,7 @@ impl Settings {
                     "shift-lights-offset-reset",
                     offset_control,
                     hud::shift_lights_offset_px() != DEFAULT_SHIFT_LIGHTS_OFFSET_PX,
+                    None,
                     cx,
                     |this, window, cx| this.reset_shift_lights_offset(window, cx),
                 )),
@@ -208,6 +211,7 @@ impl Settings {
                         .w(px(220.))
                         .with_size(Size::Small),
                     !listen_uses_default,
+                    None,
                     cx,
                     |this, window, cx| this.reset_listen_addr(window, cx),
                 ),
@@ -227,6 +231,110 @@ impl Settings {
                     |this, _, cx| this.apply_listen_addr(cx),
                 ),
             ))
+    }
+
+    pub(super) fn gear_display_settings(
+        &self,
+        colors: &Colors,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let size_control = self.input_apply_control(
+            Input::new(&self.gear_display_size_input)
+                .w(px(96.))
+                .with_size(Size::Small),
+            Some("px"),
+            "gear-display-size-apply",
+            colors,
+            cx,
+            |this, _, cx| this.apply_gear_display_size(cx),
+        );
+
+        div()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .child(Self::setting_row(
+                colors,
+                "显示挡位表",
+                "在 HUD 上显示当前车辆挡位。",
+                self.switch_control(
+                    "gear-display-visible",
+                    hud::gear_display_visible(),
+                    colors,
+                    cx,
+                    |this, visible, cx| this.set_gear_display_visible(visible, cx),
+                ),
+            ))
+            .child(self.opacity_slider_row(
+                "水平位置",
+                "相对屏幕宽度的位置；50% 时段码表水平居中。",
+                "gear-display-x-reset",
+                &self.gear_display_x_slider,
+                colors,
+                None,
+                "%",
+                1,
+                false,
+                cx,
+                |_, _, _| {},
+            ))
+            .child(self.opacity_slider_row(
+                "垂直位置",
+                "相对屏幕高度的位置；默认 7.5%。",
+                "gear-display-y-reset",
+                &self.gear_display_y_slider,
+                colors,
+                None,
+                "%",
+                1,
+                false,
+                cx,
+                |_, _, _| {},
+            ))
+            .child(Self::setting_row(
+                colors,
+                "大小",
+                "七段数码管的高度，单位像素。",
+                size_control,
+            ))
+            .child(
+                self.opacity_slider_row(
+                    "亮起透明度",
+                    "已点亮段的透明度，范围 0 到 1。",
+                    "gear-display-lit-opacity-reset",
+                    &self.gear_display_lit_opacity_slider,
+                    colors,
+                    (hud::gear_display_lit_opacity() < hud::gear_display_dim_opacity())
+                        .then_some("亮起透明度低于熄灭透明度，可能影响挡位辨认。"),
+                    "",
+                    2,
+                    false,
+                    cx,
+                    |_, _, _| {},
+                ),
+            )
+            .child(
+                self.opacity_slider_row(
+                    "熄灭透明度",
+                    "未点亮段的透明度，范围 0 到 1。",
+                    "gear-display-dim-opacity-reset",
+                    &self.gear_display_dim_opacity_slider,
+                    colors,
+                    (hud::gear_display_lit_opacity() < hud::gear_display_dim_opacity())
+                        .then_some("亮起透明度低于熄灭透明度，可能影响挡位辨认。"),
+                    "",
+                    2,
+                    false,
+                    cx,
+                    |_, _, _| {},
+                ),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(colors.disabled)
+                    .child("HUD 未收到遥测数据时，挡位会显示为 “--”。"),
+            )
     }
 
     pub(super) fn calibration_settings(
@@ -269,6 +377,7 @@ impl Settings {
                 "calibrate-ms-reset",
                 calibrate_ms_control,
                 hud::calibrate_ms() != DEFAULT_CALIBRATE_MS,
+                Some("校准时长过低可能导致识别失败，尤其是极限转速较低的车辆。"),
                 cx,
                 |this, window, cx| this.reset_calibrate_ms(window, cx),
             ))
@@ -286,82 +395,97 @@ impl Settings {
             .when(self.selected_section == SettingsSection::Overview, |el| {
                 el.child(self.overview(colors, cx))
             })
-            .when(self.selected_section != SettingsSection::Overview, |el| {
-                el.child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .size_full()
-                        .overflow_y_scrollbar()
-                        .p_6()
-                        .gap_6()
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .gap_2()
-                                .my_2()
-                                .child(
-                                    div()
-                                        .flex()
-                                        .items_center()
-                                        .gap_2()
-                                        .text_2xl()
-                                        .child(
-                                            Icon::empty()
-                                                .path(self.selected_section.icon_path())
-                                                .with_size(px(24.))
-                                                .text_color(colors.selected),
-                                        )
-                                        .child(self.selected_section.label()),
-                                )
-                                .child(
-                                    div()
-                                        .max_w(px(620.))
-                                        .text_sm()
-                                        .text_color(colors.disabled)
-                                        .child(self.selected_section.description()),
-                                ),
-                        )
-                        .child(div().flex().flex_col().gap_3().map(
-                            |el| match self.selected_section {
-                                SettingsSection::Hud => {
-                                    el.child(self.hud_display_settings(colors, cx))
-                                }
-                                SettingsSection::ShiftLights => {
-                                    el.child(self.shift_lights_settings(colors, cx))
-                                }
-                                SettingsSection::Telemetry => {
-                                    el.child(self.telemetry_settings(colors, cx))
-                                }
-                                SettingsSection::Calibration => {
-                                    el.child(self.calibration_settings(colors, cx))
-                                }
-                                _ => el.children(rows.into_iter().map(|(title, description)| {
-                                    Self::placeholder_row(colors, title, description)
-                                })),
-                            },
-                        ))
-                        .when(
-                            !matches!(
-                                self.selected_section,
-                                SettingsSection::Hud
-                                    | SettingsSection::ShiftLights
-                                    | SettingsSection::Telemetry
-                                    | SettingsSection::Calibration
-                            ),
-                            |el| {
-                                el.child(
-                                    div()
-                                        .mt_auto()
-                                        .pt_2()
-                                        .text_xs()
-                                        .text_color(colors.disabled)
-                                        .child("此区域为设置项预留空间，当前不连接真实配置。"),
-                                )
-                            },
-                        ),
-                )
+            .when(self.selected_section == SettingsSection::About, |el| {
+                el.child(self.about(colors, cx))
             })
+            .when(
+                !matches!(
+                    self.selected_section,
+                    SettingsSection::Overview | SettingsSection::About
+                ),
+                |el| {
+                    el.child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .size_full()
+                            .overflow_y_scrollbar()
+                            .p_6()
+                            .gap_6()
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .gap_2()
+                                    .my_2()
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .items_center()
+                                            .gap_2()
+                                            .text_2xl()
+                                            .child(
+                                                Icon::empty()
+                                                    .path(self.selected_section.icon_path())
+                                                    .with_size(px(24.))
+                                                    .text_color(colors.selected),
+                                            )
+                                            .child(self.selected_section.label()),
+                                    )
+                                    .child(
+                                        div()
+                                            .max_w(px(620.))
+                                            .text_sm()
+                                            .text_color(colors.disabled)
+                                            .child(self.selected_section.description()),
+                                    ),
+                            )
+                            .child(div().flex().flex_col().gap_3().map(|el| {
+                                match self.selected_section {
+                                    SettingsSection::Hud => {
+                                        el.child(self.hud_display_settings(colors, cx))
+                                    }
+                                    SettingsSection::ShiftLights => {
+                                        el.child(self.shift_lights_settings(colors, cx))
+                                    }
+                                    SettingsSection::GearDisplay => {
+                                        el.child(self.gear_display_settings(colors, cx))
+                                    }
+                                    SettingsSection::Telemetry => {
+                                        el.child(self.telemetry_settings(colors, cx))
+                                    }
+                                    SettingsSection::Calibration => {
+                                        el.child(self.calibration_settings(colors, cx))
+                                    }
+                                    _ => {
+                                        el.children(rows.into_iter().map(|(title, description)| {
+                                            Self::placeholder_row(colors, title, description)
+                                        }))
+                                    }
+                                }
+                            }))
+                            .when(
+                                !matches!(
+                                    self.selected_section,
+                                    SettingsSection::Hud
+                                        | SettingsSection::ShiftLights
+                                        | SettingsSection::GearDisplay
+                                        | SettingsSection::Telemetry
+                                        | SettingsSection::Calibration
+                                ),
+                                |el| {
+                                    el.child(
+                                        div()
+                                            .mt_auto()
+                                            .pt_2()
+                                            .text_xs()
+                                            .text_color(colors.disabled)
+                                            .child("此区域为设置项预留空间，当前不连接真实配置。"),
+                                    )
+                                },
+                            ),
+                    )
+                },
+            )
     }
 }

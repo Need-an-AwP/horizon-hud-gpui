@@ -7,9 +7,9 @@ use std::time::Duration;
 
 use crate::config::{
     ACCEL_OFFSET, CAR_CLASS_OFFSET, CAR_ORDINAL_OFFSET, CAR_PERFORMANCE_INDEX_OFFSET,
-    CURRENT_ENGINE_RPM_OFFSET, DEFAULT_LISTEN_HOST, DEFAULT_LISTEN_PORT, ENGINE_MAX_RPM_OFFSET,
-    HANDBRAKE_OFFSET, IS_RACE_ON_OFFSET, NUM_CYLINDERS_OFFSET, PACKET_SIZE, POWER_OFFSET,
-    TORQUE_OFFSET,
+    CURRENT_ENGINE_RPM_OFFSET, CURRENT_GEAR_OFFSET, DEFAULT_LISTEN_HOST, DEFAULT_LISTEN_PORT,
+    ENGINE_MAX_RPM_OFFSET, HANDBRAKE_OFFSET, IS_RACE_ON_OFFSET, NUM_CYLINDERS_OFFSET, PACKET_SIZE,
+    POWER_OFFSET, TORQUE_OFFSET,
 };
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -27,6 +27,7 @@ pub(crate) struct TelemetrySample {
     pub torque: f32,
     pub accel: u8,
     pub handbrake: u8,
+    pub current_gear: u8,
     pub is_race_on: i32,
     pub car_ordinal: i32,
     pub car_class: i32,
@@ -222,6 +223,7 @@ fn parse_telemetry(buf: &[u8]) -> Option<TelemetrySample> {
         torque: f32_le(buf, TORQUE_OFFSET)?,
         accel: buf[ACCEL_OFFSET],
         handbrake: buf[HANDBRAKE_OFFSET],
+        current_gear: buf[CURRENT_GEAR_OFFSET],
         is_race_on: i32_le(buf, IS_RACE_ON_OFFSET)?,
         car_ordinal: i32_le(buf, CAR_ORDINAL_OFFSET)?,
         car_class: i32_le(buf, CAR_CLASS_OFFSET)?,
