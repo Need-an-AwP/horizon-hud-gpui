@@ -435,7 +435,7 @@ impl RpmHud {
         match self.current_gear {
             None => "--".into(),
             Some(0) => "r".into(),
-            Some(gear) if gear >= 11 => "N".into(),
+            Some(gear) if gear >= 11 => "n".into(),
             Some(gear) => gear.to_string(),
         }
     }

@@ -153,8 +153,8 @@ fn seven_segment_mask(character: char) -> u8 {
         '7' => SEGMENT_A | SEGMENT_B | SEGMENT_C,
         '8' => SEGMENT_A | SEGMENT_B | SEGMENT_C | SEGMENT_D | SEGMENT_E | SEGMENT_F | SEGMENT_G,
         '9' => SEGMENT_A | SEGMENT_B | SEGMENT_C | SEGMENT_D | SEGMENT_F | SEGMENT_G,
-        'N' => SEGMENT_B | SEGMENT_C | SEGMENT_E | SEGMENT_F,
         'r' => SEGMENT_A | SEGMENT_E | SEGMENT_F,
+        'n' => SEGMENT_C | SEGMENT_E | SEGMENT_G,
         '-' => SEGMENT_G,
         _ => 0,
     }
