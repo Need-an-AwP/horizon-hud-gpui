@@ -2915,7 +2915,7 @@ dependencies = [
 
 [[package]]
 name = "horizon-hud-gpui"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "confy",
  "gpui",

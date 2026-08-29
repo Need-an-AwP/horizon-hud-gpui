@@ -104,7 +104,7 @@ impl Settings {
                                 .grid()
                                 .grid_cols(5)
                                 .gap_5()
-                                .child(self.overview_guide_card(colors))
+                                .child(self.overview_guide_card(colors, cx))
                                 .child(self.overview_config_card(
                                     colors,
                                     config_path.is_some(),
@@ -115,7 +115,7 @@ impl Settings {
         )
     }
 
-    fn overview_guide_card(&self, colors: &Colors) -> impl IntoElement {
+    fn overview_guide_card(&self, colors: &Colors, cx: &mut Context<Self>) -> impl IntoElement {
         div()
             .col_span(3)
             .flex()
@@ -168,7 +168,10 @@ impl Settings {
                     .font_medium()
                     .cursor_pointer()
                     .text_color(colors.selected_text)
-                    .child("配置指南"),
+                    .child("配置指南")
+                    .on_click(cx.listener(move |_, _, _, _| {
+                        let _ = webbrowser::open("https://github.com/Need-an-AwP/horizon-hud-gpui?tab=readme-ov-file");
+                    })),
             )
     }
 
