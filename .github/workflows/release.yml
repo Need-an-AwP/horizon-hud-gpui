@@ -1,0 +1,165 @@
+name: Release
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - Cargo.toml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  RELEASE_TARGET: x86_64-pc-windows-msvc
+
+jobs:
+  detect:
+    name: Detect version change
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      tag: ${{ steps.check.outputs.tag }}
+      should_release: ${{ steps.check.outputs.should_release }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compare Cargo.toml version
+        id: check
+        env:
+          BEFORE: ${{ github.event.before }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+
+          extract_version() {
+            awk '
+              /^\[package\]$/ { in_package = 1; next }
+              in_package && /^\[/ { exit }
+              in_package && /^version[[:space:]]*=/ {
+                gsub(/[" ]/, "", $3)
+                print $3
+                exit
+              }
+            '
+          }
+
+          version=$(extract_version < Cargo.toml)
+          if [[ -z "$version" ]]; then
+            echo "Could not read [package].version from Cargo.toml" >&2
+            exit 1
+          fi
+
+          tag="v${version}"
+          changed=false
+
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            changed=true
+          elif [[ -z "${BEFORE:-}" || "$BEFORE" =~ ^0+$ ]]; then
+            changed=true
+          else
+            git fetch --depth=1 origin "$BEFORE" || true
+            old=$(git show "$BEFORE:Cargo.toml" 2>/dev/null | extract_version || true)
+            if [[ "$old" != "$version" ]]; then
+              changed=true
+            fi
+          fi
+
+          should_release=false
+          if [[ "$changed" == "true" ]]; then
+            if git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null 2>&1; then
+              echo "Tag ${tag} already exists; skipping release."
+            else
+              should_release=true
+            fi
+          else
+            echo "Cargo.toml version is still ${version}; skipping release."
+          fi
+
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "should_release=${should_release}" >> "$GITHUB_OUTPUT"
+          echo "Version ${version} (tag ${tag}), should_release=${should_release}"
+
+  build:
+    name: Build Windows release
+    needs: detect
+    if: needs.detect.outputs.should_release == 'true'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ env.RELEASE_TARGET }}
+
+      - name: Locate the Windows shader compiler
+        shell: pwsh
+        run: |
+          $fxc = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\fxc.exe" |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+          if (-not $fxc) { throw 'fxc.exe was not found in the Windows SDK' }
+          "GPUI_FXC_PATH=$($fxc.FullName)" >> $env:GITHUB_ENV
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ env.RELEASE_TARGET }}
+
+      - name: Build release binary
+        run: cargo build --release --locked --target ${{ env.RELEASE_TARGET }}
+
+      - name: Package artifact
+        shell: bash
+        env:
+          VERSION: ${{ needs.detect.outputs.version }}
+        run: |
+          set -euo pipefail
+          package="horizon-hud-gpui-${VERSION}-${RELEASE_TARGET}"
+          mkdir -p dist "$package"
+          cp "target/${RELEASE_TARGET}/release/horizon-hud-gpui.exe" "$package/"
+          cp LICENSE "$package/"
+          7z a "dist/${package}.zip" "$package"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64
+          path: dist/*.zip
+          if-no-files-found: error
+
+  release:
+    name: Create GitHub Release
+    needs: [detect, build]
+    if: needs.detect.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-x64
+          path: dist
+
+      - name: Checksums
+        run: |
+          cd dist
+          sha256sum *.zip > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.detect.outputs.tag }}
+          name: Horizon HUD ${{ needs.detect.outputs.tag }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            dist/*.zip
+            dist/SHA256SUMS.txt
