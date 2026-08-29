@@ -1,7 +1,7 @@
-use gpui::{Context, IntoElement, colors::Colors, div, prelude::*, px};
+use gpui::{Context, IntoElement, div, prelude::*, px};
 use gpui_component::{Icon, Sizable, StyledExt, scroll::ScrollableElement};
 
-use super::Settings;
+use super::{Settings, colors::Colors};
 
 const APP_NAME: &str = "Horizon HUD";
 const APP_SUMMARY: &str = "Horizon HUD 是一个基于 GPUI 框架的游戏内覆盖软件，用于在 Forza Horizon 中显示简洁可靠的 HUD，并提供丰富的自定义选项。";
@@ -125,7 +125,7 @@ impl Settings {
                         "about-docs",
                         "帮助文档",
                         "使用说明与常见问题。",
-                        "https://docs.example.com/horizon-hud",
+                        "https://github.com/Need-an-AwP/horizon-hud-gpui",
                         colors,
                         cx,
                     )),

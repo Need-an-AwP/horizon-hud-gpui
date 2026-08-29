@@ -1,8 +1,8 @@
-use gpui::{Context, IntoElement, colors::Colors, div, prelude::*};
+use gpui::{Context, IntoElement, div, prelude::*};
 
 use crate::hud;
 
-use super::Settings;
+use super::{Settings, colors::Colors};
 
 impl Settings {
     pub(super) fn hud_display_settings(
@@ -17,6 +17,12 @@ impl Settings {
             .flex()
             .flex_col()
             .gap_3()
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(colors.warning)
+                    .child("此窗口拥有焦点时会暂时覆盖「仅游戏时显示」，强制显示 HUD，便于预览。失焦、离开此页或关闭设置后恢复。"),
+            )
             .child(Self::setting_row(
                 colors,
                 "仅游戏时显示",
@@ -41,11 +47,5 @@ impl Settings {
                     |this, visible, cx| this.set_charts_visible(visible, cx),
                 ),
             ))
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(colors.disabled)
-                    .child("此窗口拥有焦点时会暂时覆盖「仅游戏时显示」，强制显示 HUD，便于预览。失焦、离开此页或关闭设置后恢复。"),
-            )
     }
 }

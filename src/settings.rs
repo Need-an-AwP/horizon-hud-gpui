@@ -14,6 +14,7 @@ static OPEN_REQUEST: AtomicU8 = AtomicU8::new(OPEN_IDLE);
 
 mod about;
 mod actions;
+mod colors;
 mod controls;
 mod hud_display;
 mod layout;
@@ -31,6 +32,11 @@ pub(crate) struct Settings {
     last_shift_lights_position: ShiftLightsPosition,
     last_shift_lights_direction: ShiftLightsDirection,
     last_shift_lights_calibrated: bool,
+    last_electric_car: bool,
+    config_reset_hovered: bool,
+    config_open_hovered: bool,
+    reset_config_confirming: bool,
+    listen_addr_warning: Option<&'static str>,
     host_input: Entity<InputState>,
     port_input: Entity<InputState>,
     calibrate_ms_input: Entity<InputState>,

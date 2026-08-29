@@ -8,6 +8,7 @@ mod settings_section;
 mod telemetry;
 mod tray;
 mod ui;
+mod user_config;
 
 use std::time::Duration;
 
@@ -20,6 +21,7 @@ use hud::RpmHud;
 use platform::{configure_hud_window, register_hud_window};
 
 fn main() {
+    user_config::load_and_apply();
     tray::spawn();
     Application::new()
         .with_assets(assets::Assets)

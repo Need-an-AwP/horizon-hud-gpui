@@ -2,6 +2,7 @@ use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, AtomicUsize, Ordering};
 use std::time::Duration;
 
 use gpui::{Context, Timer};
+use serde::{Deserialize, Serialize};
 
 use crate::config::{
     CALIBRATE_MS_MAX, CALIBRATE_MS_MIN, CALIBRATE_PEAK_HOLD_FRAMES, DEFAULT_CALIBRATE_MS,
@@ -36,6 +37,7 @@ static CALIBRATE_PROGRESS_DIRECTION: AtomicU8 = AtomicU8::new(2);
 static CALIBRATE_MS: AtomicUsize = AtomicUsize::new(DEFAULT_CALIBRATE_MS);
 static FORCE_HUD_VISIBLE: AtomicBool = AtomicBool::new(false);
 static SHIFT_LIGHTS_CALIBRATED: AtomicBool = AtomicBool::new(false);
+static ELECTRIC_CAR: AtomicBool = AtomicBool::new(false);
 static GEAR_DISPLAY_X_RATIO: AtomicU32 = AtomicU32::new(DEFAULT_GEAR_DISPLAY_X_RATIO.to_bits());
 static GEAR_DISPLAY_Y_RATIO: AtomicU32 = AtomicU32::new(DEFAULT_GEAR_DISPLAY_Y_RATIO.to_bits());
 static GEAR_DISPLAY_SIZE_PX: AtomicUsize = AtomicUsize::new(DEFAULT_GEAR_DISPLAY_SIZE_PX);
@@ -44,6 +46,12 @@ static GEAR_DISPLAY_LIT_OPACITY: AtomicU32 =
     AtomicU32::new(DEFAULT_GEAR_DISPLAY_LIT_OPACITY.to_bits());
 static GEAR_DISPLAY_DIM_OPACITY: AtomicU32 =
     AtomicU32::new(DEFAULT_GEAR_DISPLAY_DIM_OPACITY.to_bits());
+
+fn persist_if(changed: bool) {
+    if changed {
+        crate::user_config::persist();
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum CalibrateProgressDirection {
@@ -76,7 +84,7 @@ pub(crate) fn charts_visible() -> bool {
 }
 
 pub(crate) fn set_charts_visible(visible: bool) {
-    SHOW_CHARTS.store(visible, Ordering::Relaxed);
+    persist_if(SHOW_CHARTS.swap(visible, Ordering::Relaxed) != visible);
 }
 
 pub(crate) fn only_show_in_game() -> bool {
@@ -84,7 +92,7 @@ pub(crate) fn only_show_in_game() -> bool {
 }
 
 pub(crate) fn set_only_show_in_game(visible: bool) {
-    SHOW_ONLY_IN_GAME.store(visible, Ordering::Relaxed);
+    persist_if(SHOW_ONLY_IN_GAME.swap(visible, Ordering::Relaxed) != visible);
 }
 
 pub(crate) fn calibrate_hint_visible() -> bool {
@@ -92,7 +100,7 @@ pub(crate) fn calibrate_hint_visible() -> bool {
 }
 
 pub(crate) fn set_calibrate_hint_visible(visible: bool) {
-    SHOW_CALIBRATE_HINT.store(visible, Ordering::Relaxed);
+    persist_if(SHOW_CALIBRATE_HINT.swap(visible, Ordering::Relaxed) != visible);
 }
 
 pub(crate) fn force_hud_visible() -> bool {
@@ -111,7 +119,16 @@ fn set_shift_lights_calibrated(calibrated: bool) {
     SHIFT_LIGHTS_CALIBRATED.store(calibrated, Ordering::Relaxed);
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) fn electric_car() -> bool {
+    ELECTRIC_CAR.load(Ordering::Relaxed)
+}
+
+fn set_electric_car(electric: bool) {
+    ELECTRIC_CAR.store(electric, Ordering::Relaxed);
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub(crate) enum ShiftLightsPosition {
     Bottom,
     Right,
@@ -143,7 +160,8 @@ impl ShiftLightsPosition {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub(crate) enum ShiftLightsDirection {
     LeftToRight,
     RightToLeft,
@@ -196,8 +214,10 @@ pub(crate) fn shift_lights_position() -> ShiftLightsPosition {
 }
 
 pub(crate) fn set_shift_lights_position(position: ShiftLightsPosition) {
-    SHIFT_LIGHTS_POSITION.store(position.to_u8(), Ordering::Relaxed);
+    let changed =
+        SHIFT_LIGHTS_POSITION.swap(position.to_u8(), Ordering::Relaxed) != position.to_u8();
     set_shift_lights_direction(ShiftLightsDirection::default_for(position));
+    persist_if(changed);
 }
 
 pub(crate) fn shift_lights_direction() -> ShiftLightsDirection {
@@ -206,7 +226,9 @@ pub(crate) fn shift_lights_direction() -> ShiftLightsDirection {
 
 pub(crate) fn set_shift_lights_direction(direction: ShiftLightsDirection) {
     if direction.is_compatible_with(shift_lights_position()) {
-        SHIFT_LIGHTS_DIRECTION.store(direction.to_u8(), Ordering::Relaxed);
+        persist_if(
+            SHIFT_LIGHTS_DIRECTION.swap(direction.to_u8(), Ordering::Relaxed) != direction.to_u8(),
+        );
     }
 }
 
@@ -231,7 +253,7 @@ pub(crate) fn shift_lights_offset_px() -> usize {
 }
 
 pub(crate) fn set_shift_lights_offset_px(offset: usize) {
-    SHIFT_LIGHTS_OFFSET_PX.store(offset, Ordering::Relaxed);
+    persist_if(SHIFT_LIGHTS_OFFSET_PX.swap(offset, Ordering::Relaxed) != offset);
 }
 
 pub(crate) fn shift_lights_thickness_px() -> usize {
@@ -242,7 +264,7 @@ pub(crate) fn set_shift_lights_thickness_px(thickness: usize) -> Result<usize, S
     if thickness == 0 {
         return Err("灯条厚度必须是大于 0 的整数。".into());
     }
-    SHIFT_LIGHTS_THICKNESS_PX.store(thickness, Ordering::Relaxed);
+    persist_if(SHIFT_LIGHTS_THICKNESS_PX.swap(thickness, Ordering::Relaxed) != thickness);
     Ok(thickness)
 }
 
@@ -251,7 +273,7 @@ pub(crate) fn shift_lights_gap_px() -> usize {
 }
 
 pub(crate) fn set_shift_lights_gap_px(gap: usize) {
-    SHIFT_LIGHTS_GAP_PX.store(gap, Ordering::Relaxed);
+    persist_if(SHIFT_LIGHTS_GAP_PX.swap(gap, Ordering::Relaxed) != gap);
 }
 
 pub(crate) fn shift_lights_width_percent() -> usize {
@@ -262,7 +284,7 @@ pub(crate) fn set_shift_lights_width_percent(width: usize) -> Result<usize, Stri
     if !(1..=100).contains(&width) {
         return Err("整体宽度必须是 1 到 100 之间的整数百分比。".into());
     }
-    SHIFT_LIGHTS_WIDTH_PERCENT.store(width, Ordering::Relaxed);
+    persist_if(SHIFT_LIGHTS_WIDTH_PERCENT.swap(width, Ordering::Relaxed) != width);
     Ok(width)
 }
 
@@ -278,7 +300,9 @@ pub(crate) fn set_shift_lights_blink_percent(percent: f32) -> Result<f32, String
             "闪烁阈值必须是 {SHIFT_LIGHTS_BLINK_PERCENT_MIN:.0} 到 {SHIFT_LIGHTS_BLINK_PERCENT_MAX:.0} 之间的百分比。"
         ));
     }
-    SHIFT_LIGHTS_BLINK_PERCENT.store(percent.to_bits(), Ordering::Relaxed);
+    persist_if(
+        SHIFT_LIGHTS_BLINK_PERCENT.swap(percent.to_bits(), Ordering::Relaxed) != percent.to_bits(),
+    );
     Ok(percent)
 }
 
@@ -286,7 +310,7 @@ fn set_shift_lights_opacity(target: &AtomicU32, opacity: f32) -> Result<f32, Str
     if !opacity.is_finite() || !(0.0..=1.0).contains(&opacity) {
         return Err("透明度必须是 0 到 1 之间的数值。".into());
     }
-    target.store(opacity.to_bits(), Ordering::Relaxed);
+    persist_if(target.swap(opacity.to_bits(), Ordering::Relaxed) != opacity.to_bits());
     Ok(opacity)
 }
 
@@ -301,8 +325,9 @@ pub(crate) fn set_gear_display_position_ratio(x: f32, y: f32) -> Result<(), Stri
     if !x.is_finite() || !y.is_finite() || !(0.0..=1.0).contains(&x) || !(0.0..=1.0).contains(&y) {
         return Err("挡位显示位置必须是 0 到 1 之间的比例。".into());
     }
-    GEAR_DISPLAY_X_RATIO.store(x.to_bits(), Ordering::Relaxed);
-    GEAR_DISPLAY_Y_RATIO.store(y.to_bits(), Ordering::Relaxed);
+    let x_changed = GEAR_DISPLAY_X_RATIO.swap(x.to_bits(), Ordering::Relaxed) != x.to_bits();
+    let y_changed = GEAR_DISPLAY_Y_RATIO.swap(y.to_bits(), Ordering::Relaxed) != y.to_bits();
+    persist_if(x_changed || y_changed);
     Ok(())
 }
 
@@ -314,7 +339,7 @@ pub(crate) fn set_gear_display_size_px(size: usize) -> Result<usize, String> {
     if size == 0 {
         return Err("挡位显示大小必须是大于 0 的整数。".into());
     }
-    GEAR_DISPLAY_SIZE_PX.store(size, Ordering::Relaxed);
+    persist_if(GEAR_DISPLAY_SIZE_PX.swap(size, Ordering::Relaxed) != size);
     Ok(size)
 }
 
@@ -323,7 +348,7 @@ pub(crate) fn gear_display_visible() -> bool {
 }
 
 pub(crate) fn set_gear_display_visible(visible: bool) {
-    GEAR_DISPLAY_VISIBLE.store(visible, Ordering::Relaxed);
+    persist_if(GEAR_DISPLAY_VISIBLE.swap(visible, Ordering::Relaxed) != visible);
 }
 
 pub(crate) fn gear_display_lit_opacity() -> f32 {
@@ -365,7 +390,7 @@ pub(crate) fn set_calibrate_ms(ms: usize) -> Result<usize, String> {
             "校准时长需在 {CALIBRATE_MS_MIN}–{CALIBRATE_MS_MAX} 毫秒之间。"
         ));
     }
-    CALIBRATE_MS.store(ms, Ordering::Relaxed);
+    persist_if(CALIBRATE_MS.swap(ms, Ordering::Relaxed) != ms);
     Ok(ms)
 }
 
@@ -555,8 +580,12 @@ impl RpmHud {
         self.power_history.push(sample.power);
         self.torque_history.push(sample.torque);
         if sample.car_id().is_some() && sample.num_cylinders == 0 {
+            set_electric_car(true);
             self.apply_electric_limiter(sample.max_rpm);
         } else {
+            if sample.car_id().is_some() {
+                set_electric_car(false);
+            }
             self.calibrate_fuel_cut();
         }
     }
@@ -617,6 +646,7 @@ impl RpmHud {
     fn reset_for_new_car(&mut self) {
         self.fuel_cut_rpm = None;
         set_shift_lights_calibrated(false);
+        set_electric_car(false);
         self.reset_calibration();
         self.rpm_history.clear();
         self.power_history.clear();

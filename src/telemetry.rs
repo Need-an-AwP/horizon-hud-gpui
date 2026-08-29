@@ -1,5 +1,5 @@
 use std::io::ErrorKind;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4, ToSocketAddrs, UdpSocket};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4, UdpSocket};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread::{self, JoinHandle};
@@ -100,21 +100,20 @@ pub(crate) fn parse_listen_addr(host: &str, port: &str) -> Result<SocketAddr, St
     let port: u16 = port
         .parse()
         .map_err(|_| "端口必须是 0 到 65535 的整数。".to_string())?;
-    if let Ok(ip) = host.parse::<IpAddr>() {
-        return Ok(SocketAddr::new(ip, port));
-    }
-    (host, port)
-        .to_socket_addrs()
-        .map_err(|err| format!("无法解析地址：{err}"))?
-        .next()
-        .ok_or_else(|| "无法解析地址。".into())
+    let ip = if host.eq_ignore_ascii_case("localhost") {
+        IpAddr::V4(Ipv4Addr::LOCALHOST)
+    } else {
+        host.parse::<IpAddr>()
+            .map_err(|_| "监听地址必须是有效的 IP。".to_string())?
+    };
+    Ok(SocketAddr::new(ip, port))
 }
 
 pub(crate) fn spawn_udp_listener() -> Arc<Mutex<Vec<TelemetrySample>>> {
     QUEUE
         .get_or_init(|| {
             let queue = Arc::new(Mutex::new(Vec::new()));
-            bind_and_spawn(default_listen_addr(), queue.clone());
+            bind_and_spawn(listen_addr(), queue.clone());
             queue
         })
         .clone()
@@ -142,11 +141,19 @@ pub(crate) fn apply_listen_addr(addr: SocketAddr) -> Result<(), String> {
     let handle = thread::spawn(move || recv_loop(socket, queue));
     *THREAD.lock().unwrap() = Some(handle);
     bump_generation();
+    crate::user_config::persist();
     Ok(())
 }
 
 pub(crate) fn apply_default_listen_addr() -> Result<(), String> {
     apply_listen_addr(default_listen_addr())
+}
+
+pub(crate) fn configure_listen_addr(host: &str, port: u16) {
+    match parse_listen_addr(host, &port.to_string()) {
+        Ok(addr) => set_addr(addr),
+        Err(_) => set_addr(default_listen_addr()),
+    }
 }
 
 fn bind_and_spawn(addr: SocketAddr, queue: Arc<Mutex<Vec<TelemetrySample>>>) {

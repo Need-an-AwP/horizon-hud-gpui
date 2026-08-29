@@ -1,7 +1,9 @@
-use gpui::{AppContext, Context, Window, colors::Colors, colors::DefaultAppearance};
+use gpui::{AppContext, Context, Entity, Window, colors::DefaultAppearance};
+
+use super::colors::Colors;
 use gpui_component::{
     Icon, IconName, Theme, ThemeMode,
-    input::InputState,
+    input::{InputEvent, InputState},
     slider::{SliderEvent, SliderState, SliderValue},
 };
 
@@ -208,6 +210,41 @@ impl Settings {
             },
         )
         .detach();
+        let mut subscribe_input =
+            |input: &Entity<InputState>,
+             on_apply: fn(&mut Self, &mut Window, &mut Context<Self>)| {
+                cx.subscribe_in(
+                    input,
+                    window,
+                    move |this, _, event: &InputEvent, window, cx| match event {
+                        InputEvent::Change => cx.notify(),
+                        InputEvent::PressEnter { .. } => on_apply(this, window, cx),
+                        _ => {}
+                    },
+                )
+                .detach();
+            };
+        subscribe_input(&host_input, |this, window, cx| {
+            this.apply_listen_addr(window, cx);
+        });
+        subscribe_input(&port_input, |this, window, cx| {
+            this.apply_listen_addr(window, cx);
+        });
+        subscribe_input(&calibrate_ms_input, |this, _, cx| {
+            this.apply_calibrate_ms(cx);
+        });
+        subscribe_input(&shift_lights_offset_input, |this, _, cx| {
+            this.apply_shift_lights_offset(cx);
+        });
+        subscribe_input(&shift_lights_thickness_input, |this, _, cx| {
+            this.apply_shift_lights_thickness(cx);
+        });
+        subscribe_input(&shift_lights_gap_input, |this, _, cx| {
+            this.apply_shift_lights_gap(cx);
+        });
+        subscribe_input(&gear_display_size_input, |this, _, cx| {
+            this.apply_gear_display_size(cx);
+        });
         Self {
             appearance_override: None,
             selected_section: initial_section,
@@ -217,6 +254,11 @@ impl Settings {
             last_shift_lights_position: hud::shift_lights_position(),
             last_shift_lights_direction: hud::shift_lights_direction(),
             last_shift_lights_calibrated: hud::shift_lights_calibrated(),
+            last_electric_car: hud::electric_car(),
+            config_reset_hovered: false,
+            config_open_hovered: false,
+            reset_config_confirming: false,
+            listen_addr_warning: None,
             host_input,
             port_input,
             calibrate_ms_input,
@@ -284,6 +326,11 @@ impl Settings {
         cx: &mut Context<Self>,
     ) {
         if self.selected_section != section {
+            if self.selected_section == SettingsSection::Overview {
+                self.config_reset_hovered = false;
+                self.config_open_hovered = false;
+                self.reset_config_confirming = false;
+            }
             self.selected_section = section;
             self.sync_force_hud_visible(window);
             cx.notify();
@@ -312,12 +359,14 @@ impl Settings {
         let position = hud::shift_lights_position();
         let direction = hud::shift_lights_direction();
         let calibrated = hud::shift_lights_calibrated();
+        let electric = hud::electric_car();
         if self.last_charts_visible != charts_visible
             || self.last_only_show_in_game != only_show_in_game
             || self.last_calibrate_hint_visible != calibrate_hint_visible
             || self.last_shift_lights_position != position
             || self.last_shift_lights_direction != direction
             || self.last_shift_lights_calibrated != calibrated
+            || self.last_electric_car != electric
         {
             self.last_charts_visible = charts_visible;
             self.last_only_show_in_game = only_show_in_game;
@@ -325,6 +374,7 @@ impl Settings {
             self.last_shift_lights_position = position;
             self.last_shift_lights_direction = direction;
             self.last_shift_lights_calibrated = calibrated;
+            self.last_electric_car = electric;
             cx.notify();
         }
     }

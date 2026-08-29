@@ -1,4 +1,4 @@
-use gpui::{Context, IntoElement, colors::Colors, div, prelude::*, px};
+use gpui::{Context, IntoElement, div, prelude::*, px};
 use gpui_component::{Icon, Sizable, Size, input::Input, scroll::ScrollableElement};
 
 use crate::config::{
@@ -11,7 +11,7 @@ use crate::hud;
 use crate::settings_section::SettingsSection;
 use crate::telemetry;
 
-use super::Settings;
+use super::{Settings, colors::Colors};
 
 impl Settings {
     pub(super) fn shift_lights_settings(
@@ -30,6 +30,11 @@ impl Settings {
                 .with_size(Size::Small),
             Some("px"),
             "shift-lights-offset-apply",
+            self.input_differs(
+                &self.shift_lights_offset_input,
+                hud::shift_lights_offset_px(),
+                cx,
+            ),
             colors,
             cx,
             |this, _, cx| this.apply_shift_lights_offset(cx),
@@ -40,6 +45,11 @@ impl Settings {
                 .with_size(Size::Small),
             Some("px"),
             "shift-lights-thickness-apply",
+            self.input_differs(
+                &self.shift_lights_thickness_input,
+                hud::shift_lights_thickness_px(),
+                cx,
+            ),
             colors,
             cx,
             |this, _, cx| this.apply_shift_lights_thickness(cx),
@@ -50,6 +60,7 @@ impl Settings {
                 .with_size(Size::Small),
             Some("px"),
             "shift-lights-gap-apply",
+            self.input_differs(&self.shift_lights_gap_input, hud::shift_lights_gap_px(), cx),
             colors,
             cx,
             |this, _, cx| this.apply_shift_lights_gap(cx),
@@ -58,6 +69,12 @@ impl Settings {
             .flex()
             .flex_col()
             .gap_5()
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(colors.warning)
+                    .child("此窗口拥有焦点时会暂时覆盖「仅游戏时显示」，强制显示 HUD，便于预览。失焦、离开此页或关闭设置后恢复。"),
+            )
             .child(
                 Self::settings_group(
                     colors,
@@ -180,12 +197,6 @@ impl Settings {
                     |this, window, cx| this.reset_shift_lights_dim_opacity(window, cx),
                 )),
             )
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(colors.disabled)
-                    .child("此窗口拥有焦点时会暂时覆盖「仅游戏时显示」，强制显示 HUD，便于预览。失焦、离开此页或关闭设置后恢复。"),
-            )
     }
 
     pub(super) fn telemetry_settings(
@@ -196,40 +207,47 @@ impl Settings {
         let (listen_host, listen_port) = telemetry::listen_host_port();
         let listen_uses_default =
             listen_host == DEFAULT_LISTEN_HOST && listen_port == DEFAULT_LISTEN_PORT;
+        let listen_dirty = self.input_differs(&self.host_input, &listen_host, cx)
+            || self.input_differs(&self.port_input, listen_port, cx);
+        let listen_control = div()
+            .flex()
+            .items_center()
+            .gap_2()
+            .when(listen_dirty, |el| {
+                el.child(self.action_button(
+                    "listen-apply",
+                    "确认",
+                    true,
+                    cx,
+                    |this, window, cx| this.apply_listen_addr(window, cx),
+                ))
+            })
+            .child(
+                Input::new(&self.host_input)
+                    .w(px(148.))
+                    .with_size(Size::Small),
+            )
+            .child(div().text_sm().text_color(colors.disabled).child(":"))
+            .child(
+                Input::new(&self.port_input)
+                    .w(px(72.))
+                    .with_size(Size::Small),
+            );
 
         div()
             .flex()
             .flex_col()
             .gap_3()
-            .child(
-                self.setting_row_with_reset(
-                    colors,
-                    "监听地址",
-                    "UDP 绑定的本机地址，默认为 127.0.0.1（仅本机）。",
-                    "listen-reset",
-                    Input::new(&self.host_input)
-                        .w(px(220.))
-                        .with_size(Size::Small),
-                    !listen_uses_default,
-                    None,
-                    cx,
-                    |this, window, cx| this.reset_listen_addr(window, cx),
-                ),
-            )
-            .child(Self::setting_row(
+            .child(self.setting_row_with_reset(
                 colors,
-                "端口",
-                "UDP 监听端口，默认为 9999。确认后会重新绑定。",
-                self.input_apply_control(
-                    Input::new(&self.port_input)
-                        .w(px(96.))
-                        .with_size(Size::Small),
-                    None,
-                    "listen-apply",
-                    colors,
-                    cx,
-                    |this, _, cx| this.apply_listen_addr(cx),
-                ),
+                "监听地址",
+                "UDP 绑定的本机地址与端口，默认为 127.0.0.1:9999。",
+                "listen-reset",
+                listen_control,
+                !listen_uses_default,
+                self.listen_addr_warning,
+                cx,
+                |this, window, cx| this.reset_listen_addr(window, cx),
             ))
     }
 
@@ -244,6 +262,11 @@ impl Settings {
                 .with_size(Size::Small),
             Some("px"),
             "gear-display-size-apply",
+            self.input_differs(
+                &self.gear_display_size_input,
+                hud::gear_display_size_px(),
+                cx,
+            ),
             colors,
             cx,
             |this, _, cx| this.apply_gear_display_size(cx),
@@ -253,6 +276,12 @@ impl Settings {
             .flex()
             .flex_col()
             .gap_3()
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(colors.warning)
+                    .child("此窗口拥有焦点时会暂时覆盖「仅游戏时显示」，强制显示 HUD，便于预览。失焦、离开此页或关闭设置后恢复。"),
+            )
             .child(Self::setting_row(
                 colors,
                 "显示挡位表",
@@ -349,6 +378,7 @@ impl Settings {
                 .with_size(Size::Small),
             Some("ms"),
             "calibrate-ms-apply",
+            self.input_differs(&self.calibrate_ms_input, hud::calibrate_ms(), cx),
             colors,
             cx,
             |this, _, cx| this.apply_calibrate_ms(cx),

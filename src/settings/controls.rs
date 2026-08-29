@@ -1,9 +1,8 @@
-use gpui::{
-    Context, Entity, IntoElement, Window, colors::Colors, div, prelude::*, px, relative, rgb,
-};
+use gpui::{Context, Entity, IntoElement, Window, div, prelude::*, px, relative};
 use gpui_component::{
     Icon, IconName, Sizable, Size, StyledExt,
     button::{Button, ButtonVariants},
+    input::InputState,
     slider::{Slider, SliderState, SliderValue},
 };
 
@@ -11,7 +10,7 @@ use crate::hud::{self, ShiftLightsDirection, ShiftLightsPosition};
 use crate::platform;
 use crate::settings_section::SettingsSection;
 
-use super::Settings;
+use super::{Settings, colors::Colors};
 
 impl Settings {
     pub(super) fn section_navigation(
@@ -161,7 +160,8 @@ impl Settings {
         Button::new(id)
             .ghost()
             .compact()
-            .with_size(Size::Small)
+            .with_size(Size::XSmall)
+            .flex_none()
             .cursor_pointer()
             .tooltip("重置")
             .icon(Icon::new(IconName::Undo2))
@@ -170,8 +170,27 @@ impl Settings {
             }))
     }
 
-    pub(super) fn warning_hint(text: &'static str) -> gpui::Div {
-        let warning_color = rgb(0xffaa33);
+    fn title_with_reset(
+        &self,
+        title: &'static str,
+        reset_id: &'static str,
+        show_reset: bool,
+        cx: &mut Context<Self>,
+        on_reset: impl Fn(&mut Self, &mut Window, &mut Context<Self>) + 'static,
+    ) -> gpui::Div {
+        div()
+            .flex()
+            .items_center()
+            .gap_1()
+            .flex_none()
+            .h(px(20.))
+            .child(div().text_sm().line_height(relative(1.)).child(title))
+            .when(show_reset, |el| {
+                el.child(self.reset_icon_button(reset_id, cx, on_reset))
+            })
+    }
+
+    pub(super) fn warning_hint(colors: &Colors, text: &'static str) -> gpui::Div {
         div()
             .flex()
             .flex_row()
@@ -179,7 +198,7 @@ impl Settings {
             .gap_1()
             .text_xs()
             .line_height(relative(1.))
-            .text_color(warning_color)
+            .text_color(colors.warning)
             .child(
                 div()
                     .flex()
@@ -191,7 +210,7 @@ impl Settings {
                         Icon::empty()
                             .path("icons/triangle-alert.svg")
                             .with_size(px(12.))
-                            .text_color(warning_color),
+                            .text_color(colors.warning),
                     ),
             )
             .child(text)
@@ -225,25 +244,27 @@ impl Settings {
                     .flex_col()
                     .gap_1()
                     .min_w_0()
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_1()
-                            .child(div().text_sm().child(title))
-                            .when(show_reset, |el| {
-                                el.child(self.reset_icon_button(reset_id, cx, on_reset))
-                            }),
-                    )
+                    .child(self.title_with_reset(title, reset_id, show_reset, cx, on_reset))
                     .child(
                         div()
                             .text_xs()
                             .text_color(colors.disabled)
                             .child(description),
                     )
-                    .when_some(warning, |el, text| el.child(Self::warning_hint(text))),
+                    .when_some(warning, |el, text| {
+                        el.child(Self::warning_hint(colors, text))
+                    }),
             )
             .child(control)
+    }
+
+    fn slider_value_width(suffix: &str, decimal_places: usize) -> gpui::Pixels {
+        match (suffix, decimal_places) {
+            ("%", 0) => px(44.),
+            ("%", _) => px(58.),
+            (_, 0) => px(36.),
+            _ => px(48.),
+        }
     }
 
     pub(super) fn opacity_slider_row(
@@ -281,40 +302,31 @@ impl Settings {
                     .flex_col()
                     .gap_1()
                     .min_w_0()
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_1()
-                            .child(div().text_sm().child(title))
-                            .when(show_reset, |el| {
-                                el.child(self.reset_icon_button(reset_id, cx, on_reset))
-                            }),
-                    )
+                    .child(self.title_with_reset(title, reset_id, show_reset, cx, on_reset))
                     .child(
                         div()
                             .text_xs()
                             .text_color(colors.disabled)
                             .child(description),
                     )
-                    .when_some(warning, |el, text| el.child(Self::warning_hint(text))),
+                    .when_some(warning, |el, text| {
+                        el.child(Self::warning_hint(colors, text))
+                    }),
             )
             .child(
                 div()
                     .flex()
                     .items_center()
                     .gap_3()
-                    .w(px(220.))
+                    .w(px(232.))
                     .child(Slider::new(slider).horizontal())
                     .child(
                         div()
                             .flex_none()
-                            .w(if decimal_places == 0 {
-                                px(36.)
-                            } else {
-                                px(48.)
-                            })
+                            .w(Self::slider_value_width(suffix, decimal_places))
+                            .whitespace_nowrap()
                             .text_sm()
+                            .text_right()
                             .text_color(colors.disabled)
                             .child(value_label),
                     ),
@@ -543,6 +555,7 @@ impl Settings {
         let button = Button::new(id)
             .with_size(Size::Small)
             .cursor_pointer()
+            .icon(Icon::empty().path("icons/corner-down-left.svg"))
             .child(div().text_sm().child(label));
 
         let button = if primary {
@@ -556,11 +569,21 @@ impl Settings {
         }))
     }
 
+    pub(super) fn input_differs(
+        &self,
+        input: &Entity<InputState>,
+        committed: impl ToString,
+        cx: &Context<Self>,
+    ) -> bool {
+        input.read(cx).value().trim() != committed.to_string()
+    }
+
     pub(super) fn input_apply_control(
         &self,
         input: impl IntoElement,
         unit: Option<&'static str>,
         apply_id: &'static str,
+        dirty: bool,
         colors: &Colors,
         cx: &mut Context<Self>,
         on_apply: impl Fn(&mut Self, &mut Window, &mut Context<Self>) + 'static,
@@ -569,10 +592,12 @@ impl Settings {
             .flex()
             .items_center()
             .gap_2()
+            .when(dirty, |el| {
+                el.child(self.action_button(apply_id, "确认", true, cx, on_apply))
+            })
             .child(input)
             .when_some(unit, |el, unit| {
                 el.child(div().text_xs().text_color(colors.disabled).child(unit))
             })
-            .child(self.action_button(apply_id, "确认", true, cx, on_apply))
     }
 }
