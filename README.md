@@ -35,3 +35,5 @@ Forza Horizon 的游戏内覆盖 HUD，用于显示换挡灯、档位等信息�
 ```bash
 cargo run
 ```
+
+`cargo run` 以标准的console程序运行，以便展示输出。GitHub Release 中的构建产物以 Windows 子系统运行，不带有控制台窗口。
