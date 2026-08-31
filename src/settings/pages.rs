@@ -400,6 +400,30 @@ impl Settings {
                     |this, visible, cx| this.set_calibrate_hint_visible(visible, cx),
                 ),
             ))
+            .child(Self::setting_row(
+                colors,
+                "更严格校准条件",
+                "开启后需同时按住手刹和油门才能校准；关闭后只需按住油门拉到断油转速。",
+                self.switch_control(
+                    "strict-calibrate-conditions",
+                    hud::strict_calibrate_conditions(),
+                    colors,
+                    cx,
+                    |this, strict, cx| this.set_strict_calibrate_conditions(strict, cx),
+                ),
+            ))
+            .child(Self::setting_row(
+                colors,
+                "记住已校准车辆",
+                "开启后将断油转速按车辆写入配置，下次遇到同一车辆时自动恢复。关闭后不再读取或写入，已有记录会保留。",
+                self.switch_control(
+                    "remember-calibrated-cars",
+                    hud::remember_calibrated_cars(),
+                    colors,
+                    cx,
+                    |this, remember, cx| this.set_remember_calibrated_cars(remember, cx),
+                ),
+            ))
             .child(self.setting_row_with_reset(
                 colors,
                 "校准时长",

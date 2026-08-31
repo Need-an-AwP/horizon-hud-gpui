@@ -251,10 +251,13 @@ impl Settings {
             last_charts_visible: hud::charts_visible(),
             last_only_show_in_game: hud::only_show_in_game(),
             last_calibrate_hint_visible: hud::calibrate_hint_visible(),
+            last_strict_calibrate_conditions: hud::strict_calibrate_conditions(),
+            last_remember_calibrated_cars: hud::remember_calibrated_cars(),
             last_shift_lights_position: hud::shift_lights_position(),
             last_shift_lights_direction: hud::shift_lights_direction(),
             last_shift_lights_calibrated: hud::shift_lights_calibrated(),
             last_electric_car: hud::electric_car(),
+            last_has_saved_calibration: hud::current_car_has_saved_calibration(),
             config_reset_hovered: false,
             config_open_hovered: false,
             reset_config_confirming: false,
@@ -356,25 +359,34 @@ impl Settings {
         let charts_visible = hud::charts_visible();
         let only_show_in_game = hud::only_show_in_game();
         let calibrate_hint_visible = hud::calibrate_hint_visible();
+        let strict_calibrate_conditions = hud::strict_calibrate_conditions();
+        let remember_calibrated_cars = hud::remember_calibrated_cars();
         let position = hud::shift_lights_position();
         let direction = hud::shift_lights_direction();
         let calibrated = hud::shift_lights_calibrated();
         let electric = hud::electric_car();
+        let has_saved_calibration = hud::current_car_has_saved_calibration();
         if self.last_charts_visible != charts_visible
             || self.last_only_show_in_game != only_show_in_game
             || self.last_calibrate_hint_visible != calibrate_hint_visible
+            || self.last_strict_calibrate_conditions != strict_calibrate_conditions
+            || self.last_remember_calibrated_cars != remember_calibrated_cars
             || self.last_shift_lights_position != position
             || self.last_shift_lights_direction != direction
             || self.last_shift_lights_calibrated != calibrated
             || self.last_electric_car != electric
+            || self.last_has_saved_calibration != has_saved_calibration
         {
             self.last_charts_visible = charts_visible;
             self.last_only_show_in_game = only_show_in_game;
             self.last_calibrate_hint_visible = calibrate_hint_visible;
+            self.last_strict_calibrate_conditions = strict_calibrate_conditions;
+            self.last_remember_calibrated_cars = remember_calibrated_cars;
             self.last_shift_lights_position = position;
             self.last_shift_lights_direction = direction;
             self.last_shift_lights_calibrated = calibrated;
             self.last_electric_car = electric;
+            self.last_has_saved_calibration = has_saved_calibration;
             cx.notify();
         }
     }

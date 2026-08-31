@@ -12,7 +12,7 @@ use crate::config::{
     POWER_OFFSET, TORQUE_OFFSET,
 };
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct CarId {
     pub ordinal: i32,
     pub class: i32,

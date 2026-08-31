@@ -13,13 +13,37 @@ use crate::config::{
     DEFAULT_SHIFT_LIGHTS_THICKNESS_PX, DEFAULT_SHIFT_LIGHTS_WIDTH_PERCENT,
 };
 use crate::hud::{self, ShiftLightsDirection, ShiftLightsPosition};
-use crate::telemetry;
+use crate::telemetry::{self, CarId};
 
 const CONFIG_FILE_NAME: &str = "horizon-hud.toml";
 const APP_DIR_NAME: &str = "horizon-hud-gpui";
 
 static APPLYING: AtomicBool = AtomicBool::new(false);
 static ACTIVE_PATH: Mutex<Option<PathBuf>> = Mutex::new(None);
+static CALIBRATED_CARS: Mutex<Vec<CalibratedCar>> = Mutex::new(Vec::new());
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub(crate) struct CalibratedCar {
+    pub ordinal: i32,
+    pub class: i32,
+    pub pi: i32,
+    pub fuel_cut_rpm: f32,
+}
+
+impl CalibratedCar {
+    fn from_car(id: CarId, fuel_cut_rpm: f32) -> Self {
+        Self {
+            ordinal: id.ordinal,
+            class: id.class,
+            pi: id.pi,
+            fuel_cut_rpm,
+        }
+    }
+
+    fn matches(&self, id: CarId) -> bool {
+        self.ordinal == id.ordinal && self.class == id.class && self.pi == id.pi
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -27,6 +51,9 @@ pub(crate) struct UserConfig {
     pub only_show_in_game: bool,
     pub charts_visible: bool,
     pub calibrate_hint_visible: bool,
+    pub strict_calibrate_conditions: bool,
+    #[serde(default = "default_true")]
+    pub remember_calibrated_cars: bool,
     pub shift_lights_position: ShiftLightsPosition,
     pub shift_lights_direction: ShiftLightsDirection,
     pub shift_lights_lit_opacity: f32,
@@ -45,6 +72,8 @@ pub(crate) struct UserConfig {
     pub calibrate_ms: usize,
     pub listen_host: String,
     pub listen_port: u16,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub calibrated_cars: Vec<CalibratedCar>,
 }
 
 impl Default for UserConfig {
@@ -53,6 +82,8 @@ impl Default for UserConfig {
             only_show_in_game: true,
             charts_visible: false,
             calibrate_hint_visible: false,
+            strict_calibrate_conditions: false,
+            remember_calibrated_cars: true,
             shift_lights_position: ShiftLightsPosition::Top,
             shift_lights_direction: ShiftLightsDirection::LeftToRight,
             shift_lights_lit_opacity: DEFAULT_SHIFT_LIGHTS_LIT_OPACITY,
@@ -71,6 +102,7 @@ impl Default for UserConfig {
             calibrate_ms: DEFAULT_CALIBRATE_MS,
             listen_host: DEFAULT_LISTEN_HOST.to_string(),
             listen_port: DEFAULT_LISTEN_PORT,
+            calibrated_cars: Vec::new(),
         }
     }
 }
@@ -83,6 +115,8 @@ impl UserConfig {
             only_show_in_game: hud::only_show_in_game(),
             charts_visible: hud::charts_visible(),
             calibrate_hint_visible: hud::calibrate_hint_visible(),
+            strict_calibrate_conditions: hud::strict_calibrate_conditions(),
+            remember_calibrated_cars: hud::remember_calibrated_cars(),
             shift_lights_position: hud::shift_lights_position(),
             shift_lights_direction: hud::shift_lights_direction(),
             shift_lights_lit_opacity: hud::shift_lights_lit_opacity(),
@@ -101,6 +135,7 @@ impl UserConfig {
             calibrate_ms: hud::calibrate_ms(),
             listen_host,
             listen_port,
+            calibrated_cars: calibrated_cars(),
         }
     }
 
@@ -108,6 +143,8 @@ impl UserConfig {
         hud::set_only_show_in_game(self.only_show_in_game);
         hud::set_charts_visible(self.charts_visible);
         hud::set_calibrate_hint_visible(self.calibrate_hint_visible);
+        hud::set_strict_calibrate_conditions(self.strict_calibrate_conditions);
+        hud::set_remember_calibrated_cars(self.remember_calibrated_cars);
         hud::set_gear_display_visible(self.gear_display_visible);
         hud::set_shift_lights_position(self.shift_lights_position);
         hud::set_shift_lights_direction(self.shift_lights_direction);
@@ -127,6 +164,7 @@ impl UserConfig {
         let _ = hud::set_gear_display_dim_opacity(self.gear_display_dim_opacity);
         let _ = hud::set_calibrate_ms(self.calibrate_ms);
         telemetry::configure_listen_addr(&self.listen_host, self.listen_port);
+        set_calibrated_cars(self.calibrated_cars.clone());
     }
 }
 
@@ -145,11 +183,83 @@ pub(crate) fn persist() {
 }
 
 pub(crate) fn reset_to_defaults() {
-    let cfg = UserConfig::default();
+    let mut cfg = UserConfig::default();
+    cfg.calibrated_cars = calibrated_cars();
     APPLYING.store(true, Ordering::Relaxed);
     cfg.apply();
     APPLYING.store(false, Ordering::Relaxed);
     save(&cfg);
+}
+
+fn default_true() -> bool {
+    true
+}
+
+fn calibrated_cars() -> Vec<CalibratedCar> {
+    CALIBRATED_CARS
+        .lock()
+        .unwrap_or_else(|err| err.into_inner())
+        .clone()
+}
+
+fn set_calibrated_cars(cars: Vec<CalibratedCar>) {
+    *CALIBRATED_CARS
+        .lock()
+        .unwrap_or_else(|err| err.into_inner()) = cars;
+}
+
+pub(crate) fn fuel_cut_rpm_for(id: CarId) -> Option<f32> {
+    if !hud::remember_calibrated_cars() {
+        return None;
+    }
+    CALIBRATED_CARS
+        .lock()
+        .unwrap_or_else(|err| err.into_inner())
+        .iter()
+        .find(|car| car.matches(id))
+        .map(|car| car.fuel_cut_rpm)
+}
+
+pub(crate) fn upsert_calibrated_car(id: CarId, fuel_cut_rpm: f32) {
+    if !hud::remember_calibrated_cars() {
+        return;
+    }
+    let changed = {
+        let mut cars = CALIBRATED_CARS
+            .lock()
+            .unwrap_or_else(|err| err.into_inner());
+        if let Some(existing) = cars.iter_mut().find(|car| car.matches(id)) {
+            if existing.fuel_cut_rpm == fuel_cut_rpm {
+                false
+            } else {
+                existing.fuel_cut_rpm = fuel_cut_rpm;
+                true
+            }
+        } else {
+            cars.push(CalibratedCar::from_car(id, fuel_cut_rpm));
+            true
+        }
+    };
+    if changed {
+        persist();
+    }
+}
+
+pub(crate) fn remove_calibrated_car(id: CarId) {
+    if !hud::remember_calibrated_cars() {
+        return;
+    }
+    let removed = {
+        let mut cars = CALIBRATED_CARS
+            .lock()
+            .unwrap_or_else(|err| err.into_inner());
+        let before = cars.len();
+        cars.retain(|car| !car.matches(id));
+        cars.len() != before
+    };
+    if removed {
+        persist();
+    }
 }
 
 fn load() -> UserConfig {

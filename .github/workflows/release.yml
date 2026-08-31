@@ -116,7 +116,7 @@ jobs:
 
       - name: Build release binary
         env:
-          RUSTFLAGS: "-C windows-subsystem=windows"
+          RUSTFLAGS: "-C link-arg=/SUBSYSTEM:WINDOWS -C link-arg=/ENTRY:mainCRTStartup"
         run: cargo build --release --locked --target ${{ env.RELEASE_TARGET }}
 
       - name: Package artifact

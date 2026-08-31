@@ -41,7 +41,11 @@ impl Settings {
         } else {
             (
                 "等待校准",
-                "同时按下手刹和油门，等待转速上升完成校准".to_string(),
+                if hud::strict_calibrate_conditions() {
+                    "同时按下手刹和油门，等待转速上升完成校准".to_string()
+                } else {
+                    "按住油门拉到断油转速完成校准".to_string()
+                },
                 colors.warning,
             )
         };
@@ -83,6 +87,7 @@ impl Settings {
                                     listener_color,
                                     "icons/braces.svg",
                                     SettingsSection::Telemetry,
+                                    false,
                                     colors,
                                     cx,
                                 ))
@@ -94,6 +99,7 @@ impl Settings {
                                     calibration_color,
                                     "icons/gauge.svg",
                                     SettingsSection::Calibration,
+                                    hud::current_car_has_saved_calibration(),
                                     colors,
                                     cx,
                                 )),
@@ -325,6 +331,7 @@ impl Settings {
         value_color: gpui::Rgba,
         icon_path: &'static str,
         section: SettingsSection,
+        show_reset: bool,
         colors: &Colors,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
@@ -348,27 +355,62 @@ impl Settings {
                     .child(div().text_sm().text_color(colors.disabled).child(label))
                     .child(
                         div()
-                            .id((id, section.index()))
                             .flex()
                             .items_center()
-                            .justify_center()
-                            .size(px(28.))
-                            .rounded_md()
-                            .bg(colors.background)
-                            .cursor_pointer()
-                            .tooltip({
-                                let tooltip = format!("前往{}", section.label());
-                                move |window, cx| Tooltip::new(tooltip.clone()).build(window, cx)
+                            .gap_2()
+                            .when(show_reset, |el| {
+                                el.child(
+                                    div()
+                                        .id((id, 99u64))
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .size(px(28.))
+                                        .rounded_md()
+                                        .bg(colors.background)
+                                        .cursor_pointer()
+                                        .tooltip(|window, cx| {
+                                            Tooltip::new("重置当前车辆的断油转速")
+                                                .build(window, cx)
+                                        })
+                                        .hover(|style| style.bg(colors.warning))
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            this.reset_current_car_calibration(cx);
+                                        }))
+                                        .child(
+                                            Icon::empty()
+                                                .path("icons/refresh-ccw.svg")
+                                                .with_size(px(15.))
+                                                .text_color(colors.selected),
+                                        ),
+                                )
                             })
-                            .hover(|style| style.bg(colors.container))
-                            .on_click(cx.listener(move |this, _, window, cx| {
-                                this.select_section(section, window, cx);
-                            }))
                             .child(
-                                Icon::empty()
-                                    .path(icon_path)
-                                    .with_size(px(15.))
-                                    .text_color(colors.selected),
+                                div()
+                                    .id((id, section.index()))
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .size(px(28.))
+                                    .rounded_md()
+                                    .bg(colors.background)
+                                    .cursor_pointer()
+                                    .tooltip({
+                                        let tooltip = format!("前往{}", section.label());
+                                        move |window, cx| {
+                                            Tooltip::new(tooltip.clone()).build(window, cx)
+                                        }
+                                    })
+                                    .hover(|style| style.bg(colors.container))
+                                    .on_click(cx.listener(move |this, _, window, cx| {
+                                        this.select_section(section, window, cx);
+                                    }))
+                                    .child(
+                                        Icon::empty()
+                                            .path(icon_path)
+                                            .with_size(px(15.))
+                                            .text_color(colors.selected),
+                                    ),
                             ),
                     ),
             )

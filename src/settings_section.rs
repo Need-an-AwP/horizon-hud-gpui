@@ -29,7 +29,7 @@ impl SettingsSection {
             Self::ShiftLights => "按位置、尺寸和显示效果配置转速指示灯。",
             Self::GearDisplay => "调整七段数码管挡位显示的位置、大小和透明度。",
             Self::Telemetry => "配置 UDP 遥测监听地址和端口。",
-            Self::Calibration => "配置转速指示灯校准时长与提示样式。",
+            Self::Calibration => "配置转速指示灯校准时长、条件与提示样式。",
             Self::About => "查看应用信息、版本与支持资源。",
         }
     }
@@ -90,8 +90,11 @@ impl SettingsSection {
             ],
             Self::Calibration => [
                 ("校准时长", "燃油切断检测需要保持的最短时间。"),
+                (
+                    "记住已校准车辆",
+                    "将断油转速按车辆写入配置，可随时关闭而不删除已有记录。",
+                ),
                 ("校准提示样式", "自定义校准过程中的提示外观。"),
-                ("峰值保持", "校准完成前转速峰值的稳定窗口。"),
             ],
             Self::About => [
                 ("Horizon HUD", "应用版本、更新记录与许可证信息。"),

@@ -31,6 +31,26 @@ impl Settings {
         cx.notify();
     }
 
+    pub(super) fn set_strict_calibrate_conditions(&mut self, strict: bool, cx: &mut Context<Self>) {
+        hud::set_strict_calibrate_conditions(strict);
+        self.last_strict_calibrate_conditions = strict;
+        cx.notify();
+    }
+
+    pub(super) fn set_remember_calibrated_cars(&mut self, remember: bool, cx: &mut Context<Self>) {
+        hud::set_remember_calibrated_cars(remember);
+        self.last_remember_calibrated_cars = remember;
+        self.last_has_saved_calibration = hud::current_car_has_saved_calibration();
+        cx.notify();
+    }
+
+    pub(super) fn reset_current_car_calibration(&mut self, cx: &mut Context<Self>) {
+        hud::reset_current_car_calibration();
+        self.last_shift_lights_calibrated = hud::shift_lights_calibrated();
+        self.last_has_saved_calibration = hud::current_car_has_saved_calibration();
+        cx.notify();
+    }
+
     pub(super) fn set_gear_display_visible(&mut self, visible: bool, cx: &mut Context<Self>) {
         hud::set_gear_display_visible(visible);
         cx.notify();
@@ -318,6 +338,8 @@ impl Settings {
         self.last_charts_visible = hud::charts_visible();
         self.last_only_show_in_game = hud::only_show_in_game();
         self.last_calibrate_hint_visible = hud::calibrate_hint_visible();
+        self.last_strict_calibrate_conditions = hud::strict_calibrate_conditions();
+        self.last_remember_calibrated_cars = hud::remember_calibrated_cars();
         self.last_shift_lights_position = hud::shift_lights_position();
         self.last_shift_lights_direction = hud::shift_lights_direction();
     }

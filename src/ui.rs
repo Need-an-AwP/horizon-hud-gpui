@@ -495,7 +495,14 @@ impl Render for RpmHud {
                 if let Some((elapsed, duration)) = self.calibrate_progress() {
                     Some(format!("校准中 {:.1}/{:.1}s", elapsed, duration))
                 } else {
-                    Some("手刹+油门原地拉转校准".into())
+                    Some(
+                        if self.strict_calibrate_conditions() {
+                            "手刹+油门原地拉转校准"
+                        } else {
+                            "按住油门拉到断油转速校准"
+                        }
+                        .into(),
+                    )
                 }
             } else {
                 None

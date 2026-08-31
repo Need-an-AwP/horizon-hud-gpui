@@ -1,3 +1,4 @@
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, AtomicUsize, Ordering};
 use std::time::Duration;
 
@@ -35,9 +36,13 @@ static SHIFT_LIGHTS_BLINK_PERCENT: AtomicU32 =
     AtomicU32::new(DEFAULT_SHIFT_LIGHTS_BLINK_PERCENT.to_bits());
 static CALIBRATE_PROGRESS_DIRECTION: AtomicU8 = AtomicU8::new(2);
 static CALIBRATE_MS: AtomicUsize = AtomicUsize::new(DEFAULT_CALIBRATE_MS);
+static STRICT_CALIBRATE_CONDITIONS: AtomicBool = AtomicBool::new(false);
+static REMEMBER_CALIBRATED_CARS: AtomicBool = AtomicBool::new(true);
 static FORCE_HUD_VISIBLE: AtomicBool = AtomicBool::new(false);
 static SHIFT_LIGHTS_CALIBRATED: AtomicBool = AtomicBool::new(false);
 static ELECTRIC_CAR: AtomicBool = AtomicBool::new(false);
+static RESET_CURRENT_CALIBRATION: AtomicBool = AtomicBool::new(false);
+static CURRENT_CAR_ID: Mutex<Option<CarId>> = Mutex::new(None);
 static GEAR_DISPLAY_X_RATIO: AtomicU32 = AtomicU32::new(DEFAULT_GEAR_DISPLAY_X_RATIO.to_bits());
 static GEAR_DISPLAY_Y_RATIO: AtomicU32 = AtomicU32::new(DEFAULT_GEAR_DISPLAY_Y_RATIO.to_bits());
 static GEAR_DISPLAY_SIZE_PX: AtomicUsize = AtomicUsize::new(DEFAULT_GEAR_DISPLAY_SIZE_PX);
@@ -103,6 +108,22 @@ pub(crate) fn set_calibrate_hint_visible(visible: bool) {
     persist_if(SHOW_CALIBRATE_HINT.swap(visible, Ordering::Relaxed) != visible);
 }
 
+pub(crate) fn strict_calibrate_conditions() -> bool {
+    STRICT_CALIBRATE_CONDITIONS.load(Ordering::Relaxed)
+}
+
+pub(crate) fn set_strict_calibrate_conditions(strict: bool) {
+    persist_if(STRICT_CALIBRATE_CONDITIONS.swap(strict, Ordering::Relaxed) != strict);
+}
+
+pub(crate) fn remember_calibrated_cars() -> bool {
+    REMEMBER_CALIBRATED_CARS.load(Ordering::Relaxed)
+}
+
+pub(crate) fn set_remember_calibrated_cars(remember: bool) {
+    persist_if(REMEMBER_CALIBRATED_CARS.swap(remember, Ordering::Relaxed) != remember);
+}
+
 pub(crate) fn force_hud_visible() -> bool {
     FORCE_HUD_VISIBLE.load(Ordering::Relaxed)
 }
@@ -117,6 +138,36 @@ pub(crate) fn shift_lights_calibrated() -> bool {
 
 fn set_shift_lights_calibrated(calibrated: bool) {
     SHIFT_LIGHTS_CALIBRATED.store(calibrated, Ordering::Relaxed);
+}
+
+fn current_car_id() -> Option<CarId> {
+    *CURRENT_CAR_ID
+        .lock()
+        .unwrap_or_else(|err| err.into_inner())
+}
+
+fn set_current_car_id(id: Option<CarId>) {
+    *CURRENT_CAR_ID
+        .lock()
+        .unwrap_or_else(|err| err.into_inner()) = id;
+}
+
+pub(crate) fn current_car_has_saved_calibration() -> bool {
+    current_car_id()
+        .and_then(crate::user_config::fuel_cut_rpm_for)
+        .is_some()
+}
+
+pub(crate) fn reset_current_car_calibration() {
+    if let Some(id) = current_car_id() {
+        crate::user_config::remove_calibrated_car(id);
+    }
+    set_shift_lights_calibrated(false);
+    RESET_CURRENT_CALIBRATION.store(true, Ordering::Relaxed);
+}
+
+fn take_reset_current_calibration() -> bool {
+    RESET_CURRENT_CALIBRATION.swap(false, Ordering::Relaxed)
 }
 
 pub(crate) fn electric_car() -> bool {
@@ -497,6 +548,10 @@ impl RpmHud {
         calibrate_hint_visible()
     }
 
+    pub(crate) fn strict_calibrate_conditions(&self) -> bool {
+        strict_calibrate_conditions()
+    }
+
     pub(crate) fn shift_lights_position(&self) -> ShiftLightsPosition {
         shift_lights_position()
     }
@@ -566,6 +621,8 @@ impl RpmHud {
                     self.reset_for_new_car();
                 }
                 self.car_id = Some(car_id);
+                set_current_car_id(Some(car_id));
+                self.restore_stored_calibration(car_id);
             }
         }
         self.rpm = sample.rpm;
@@ -613,7 +670,11 @@ impl RpmHud {
         if self.fuel_cut_rpm.is_some() {
             return;
         }
-        let holding = self.handbrake > 0 && self.accel > 0 && self.is_fuel_cut();
+        let holding = if strict_calibrate_conditions() {
+            self.handbrake > 0 && self.accel > 0 && self.is_fuel_cut()
+        } else {
+            self.accel > 0 && self.is_fuel_cut()
+        };
         if !holding {
             self.reset_calibration();
             return;
@@ -634,6 +695,27 @@ impl RpmHud {
 
         self.fuel_cut_rpm = Some(self.calibrate_rpm_max);
         set_shift_lights_calibrated(true);
+        if let Some(car_id) = self.car_id {
+            crate::user_config::upsert_calibrated_car(car_id, self.calibrate_rpm_max);
+        }
+        self.reset_calibration();
+    }
+
+    fn restore_stored_calibration(&mut self, car_id: CarId) {
+        if self.fuel_cut_rpm.is_some() {
+            return;
+        }
+        let Some(rpm) = crate::user_config::fuel_cut_rpm_for(car_id) else {
+            return;
+        };
+        self.fuel_cut_rpm = Some(rpm);
+        set_shift_lights_calibrated(true);
+        self.reset_calibration();
+    }
+
+    fn clear_runtime_calibration(&mut self) {
+        self.fuel_cut_rpm = None;
+        set_shift_lights_calibrated(false);
         self.reset_calibration();
     }
 
@@ -660,6 +742,8 @@ fn start_sample_pump(cx: &mut Context<RpmHud>) {
     cx.spawn(async move |this, cx| {
         let mut last_charts = charts_visible();
         let mut last_calibrate_hint_visible = calibrate_hint_visible();
+        let mut last_strict_calibrate_conditions = strict_calibrate_conditions();
+        let mut last_remember_calibrated_cars = remember_calibrated_cars();
         let mut last_shift_lights_position = shift_lights_position();
         let mut last_shift_lights_direction = shift_lights_direction();
         let mut last_shift_lights_lit_opacity = shift_lights_lit_opacity();
@@ -682,8 +766,11 @@ fn start_sample_pump(cx: &mut Context<RpmHud>) {
                 let mut queue = queue.lock().unwrap();
                 std::mem::take(&mut *queue)
             };
+            let reset_calibration = take_reset_current_calibration();
             let show_charts = charts_visible();
             let calibrate_hint = calibrate_hint_visible();
+            let strict_calibrate = strict_calibrate_conditions();
+            let remember_cars = remember_calibrated_cars();
             let lights_position = shift_lights_position();
             let lights_direction = shift_lights_direction();
             let lights_lit_opacity = shift_lights_lit_opacity();
@@ -701,9 +788,13 @@ fn start_sample_pump(cx: &mut Context<RpmHud>) {
             let gear_display_visible = gear_display_visible();
             let gear_display_lit_opacity = gear_display_lit_opacity();
             let gear_display_dim_opacity = gear_display_dim_opacity();
+            let remember_just_enabled = remember_cars && !last_remember_calibrated_cars;
             if !samples.is_empty()
+                || reset_calibration
                 || show_charts != last_charts
                 || calibrate_hint != last_calibrate_hint_visible
+                || strict_calibrate != last_strict_calibrate_conditions
+                || remember_cars != last_remember_calibrated_cars
                 || lights_position != last_shift_lights_position
                 || lights_direction != last_shift_lights_direction
                 || lights_lit_opacity != last_shift_lights_lit_opacity
@@ -724,6 +815,8 @@ fn start_sample_pump(cx: &mut Context<RpmHud>) {
             {
                 last_charts = show_charts;
                 last_calibrate_hint_visible = calibrate_hint;
+                last_strict_calibrate_conditions = strict_calibrate;
+                last_remember_calibrated_cars = remember_cars;
                 last_shift_lights_position = lights_position;
                 last_shift_lights_direction = lights_direction;
                 last_shift_lights_lit_opacity = lights_lit_opacity;
@@ -742,6 +835,14 @@ fn start_sample_pump(cx: &mut Context<RpmHud>) {
                 last_gear_display_lit_opacity = gear_display_lit_opacity;
                 last_gear_display_dim_opacity = gear_display_dim_opacity;
                 this.update(cx, |this, cx| {
+                    if reset_calibration {
+                        this.clear_runtime_calibration();
+                    }
+                    if remember_just_enabled {
+                        if let Some(car_id) = this.car_id {
+                            this.restore_stored_calibration(car_id);
+                        }
+                    }
                     for sample in samples {
                         this.apply(sample);
                     }
