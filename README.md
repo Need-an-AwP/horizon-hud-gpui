@@ -29,6 +29,15 @@ Forza Horizon 的游戏内覆盖 HUD，用于显示换挡灯、档位等信息�
 
 若在 Horizon HUD 设置里改过监听地址或端口，游戏里也要改成相同的值。
 
+## 配置随游戏自动启动
+
+在steam中找到极限竞速：地平线6，右键打开属性，在启动选项中填写：
+```bat
+cmd /c start "" "C:\Path\To\horizon-hud-gpui.exe" & %command%
+```
+请修改为自己的horizon-hud文件路径，注意使用英文双引号和反斜杠。最简单的办法，右键你的`horizon-hud-gpui.exe`文件，复制文件地址，或者ctrl+shift+c，即可得到标准的路径。
+完成配置后horizon-hud即可自动跟随游戏启动。
+
 ## 从源码编译
 
 需要安装 [Rust](https://rustup.rs/)（edition 2024）以及 Windows SDK。
