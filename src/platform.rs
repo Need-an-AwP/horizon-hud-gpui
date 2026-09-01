@@ -14,6 +14,10 @@ static QUIT_REQUESTED: AtomicBool = AtomicBool::new(false);
 
 #[cfg(target_os = "windows")]
 static HUD_HWND: OnceLock<isize> = OnceLock::new();
+#[cfg(target_os = "windows")]
+static INSTANCE_MUTEX: OnceLock<isize> = OnceLock::new();
+#[cfg(target_os = "windows")]
+static ACTIVATE_EVENT: OnceLock<isize> = OnceLock::new();
 
 #[cfg(target_os = "windows")]
 fn window_hwnd(window: &Window) -> Option<HWND> {
@@ -268,5 +272,72 @@ pub(crate) fn quit_app() {
 pub(crate) fn poll_quit(cx: &mut App) {
     if QUIT_REQUESTED.swap(false, Ordering::Relaxed) {
         cx.quit();
+    }
+}
+
+#[cfg(target_os = "windows")]
+const INSTANCE_MUTEX_NAME: windows::core::PCWSTR =
+    windows::core::w!("Local\\horizon-hud-gpui.single-instance");
+#[cfg(target_os = "windows")]
+const ACTIVATE_EVENT_NAME: windows::core::PCWSTR =
+    windows::core::w!("Local\\horizon-hud-gpui.activate");
+
+pub(crate) fn try_become_singleton() -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        become_windows_singleton()
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        true
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn become_windows_singleton() -> bool {
+    use windows::Win32::Foundation::{CloseHandle, WAIT_ABANDONED, WAIT_OBJECT_0, WAIT_TIMEOUT};
+    use windows::Win32::System::Threading::{
+        CreateEventW, CreateMutexW, EVENT_MODIFY_STATE, OpenEventW, SetEvent, WaitForSingleObject,
+    };
+
+    unsafe {
+        let Ok(mutex) = CreateMutexW(None, false, INSTANCE_MUTEX_NAME) else {
+            return true;
+        };
+        let wait = WaitForSingleObject(mutex, 0);
+        if wait == WAIT_TIMEOUT {
+            let _ = CloseHandle(mutex);
+            if let Ok(event) = OpenEventW(EVENT_MODIFY_STATE, false, ACTIVATE_EVENT_NAME) {
+                let _ = SetEvent(event);
+                let _ = CloseHandle(event);
+            }
+            return false;
+        }
+        if wait != WAIT_OBJECT_0 && wait != WAIT_ABANDONED {
+            let _ = CloseHandle(mutex);
+            return true;
+        }
+        let _ = INSTANCE_MUTEX.set(mutex.0 as isize);
+        if let Ok(event) = CreateEventW(None, false, false, ACTIVATE_EVENT_NAME) {
+            let _ = ACTIVATE_EVENT.set(event.0 as isize);
+        }
+        true
+    }
+}
+
+pub(crate) fn take_activate_request() -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        use windows::Win32::Foundation::{HANDLE, WAIT_OBJECT_0};
+        use windows::Win32::System::Threading::WaitForSingleObject;
+
+        let Some(event) = ACTIVATE_EVENT.get() else {
+            return false;
+        };
+        unsafe { WaitForSingleObject(HANDLE(*event as _), 0) == WAIT_OBJECT_0 }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        false
     }
 }

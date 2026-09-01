@@ -21,6 +21,9 @@ use hud::RpmHud;
 use platform::{configure_hud_window, register_hud_window};
 
 fn main() {
+    if !platform::try_become_singleton() {
+        return;
+    }
     user_config::load_and_apply();
     tray::spawn();
     Application::new()
@@ -39,6 +42,9 @@ fn main() {
                 loop {
                     Timer::after(Duration::from_millis(50)).await;
                     let _ = cx.update(|cx| {
+                        if platform::take_activate_request() {
+                            settings::request_open();
+                        }
                         settings::poll_open(cx);
                         settings::poll_sync(cx);
                         platform::poll_quit(cx);
