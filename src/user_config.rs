@@ -5,7 +5,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use serde::{Deserialize, Serialize};
 
 use crate::config::{
-    DEFAULT_CALIBRATE_MS, DEFAULT_GEAR_DISPLAY_DIM_OPACITY, DEFAULT_GEAR_DISPLAY_LIT_OPACITY,
+    DEFAULT_CALIBRATE_MS, DEFAULT_FORWARD_HOST, DEFAULT_FORWARD_PORT,
+    DEFAULT_GEAR_DISPLAY_DIM_OPACITY, DEFAULT_GEAR_DISPLAY_LIT_OPACITY,
     DEFAULT_GEAR_DISPLAY_SIZE_PX, DEFAULT_GEAR_DISPLAY_X_RATIO, DEFAULT_GEAR_DISPLAY_Y_RATIO,
     DEFAULT_LISTEN_HOST, DEFAULT_LISTEN_PORT, DEFAULT_SHIFT_LIGHTS_BLINK_PERCENT,
     DEFAULT_SHIFT_LIGHTS_DIM_OPACITY, DEFAULT_SHIFT_LIGHTS_GAP_PX,
@@ -72,6 +73,9 @@ pub(crate) struct UserConfig {
     pub calibrate_ms: usize,
     pub listen_host: String,
     pub listen_port: u16,
+    pub forward_enabled: bool,
+    pub forward_host: String,
+    pub forward_port: u16,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub calibrated_cars: Vec<CalibratedCar>,
 }
@@ -102,6 +106,9 @@ impl Default for UserConfig {
             calibrate_ms: DEFAULT_CALIBRATE_MS,
             listen_host: DEFAULT_LISTEN_HOST.to_string(),
             listen_port: DEFAULT_LISTEN_PORT,
+            forward_enabled: false,
+            forward_host: DEFAULT_FORWARD_HOST.to_string(),
+            forward_port: DEFAULT_FORWARD_PORT,
             calibrated_cars: Vec::new(),
         }
     }
@@ -110,6 +117,7 @@ impl Default for UserConfig {
 impl UserConfig {
     fn from_runtime() -> Self {
         let (listen_host, listen_port) = telemetry::listen_host_port();
+        let (forward_host, forward_port) = telemetry::forward_host_port();
         let (gear_display_x_ratio, gear_display_y_ratio) = hud::gear_display_position_ratio();
         Self {
             only_show_in_game: hud::only_show_in_game(),
@@ -135,6 +143,9 @@ impl UserConfig {
             calibrate_ms: hud::calibrate_ms(),
             listen_host,
             listen_port,
+            forward_enabled: telemetry::forward_enabled(),
+            forward_host,
+            forward_port,
             calibrated_cars: calibrated_cars(),
         }
     }
@@ -164,6 +175,7 @@ impl UserConfig {
         let _ = hud::set_gear_display_dim_opacity(self.gear_display_dim_opacity);
         let _ = hud::set_calibrate_ms(self.calibrate_ms);
         telemetry::configure_listen_addr(&self.listen_host, self.listen_port);
+        telemetry::configure_forward(self.forward_enabled, &self.forward_host, self.forward_port);
         set_calibrated_cars(self.calibrated_cars.clone());
     }
 }

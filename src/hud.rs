@@ -141,15 +141,11 @@ fn set_shift_lights_calibrated(calibrated: bool) {
 }
 
 fn current_car_id() -> Option<CarId> {
-    *CURRENT_CAR_ID
-        .lock()
-        .unwrap_or_else(|err| err.into_inner())
+    *CURRENT_CAR_ID.lock().unwrap_or_else(|err| err.into_inner())
 }
 
 fn set_current_car_id(id: Option<CarId>) {
-    *CURRENT_CAR_ID
-        .lock()
-        .unwrap_or_else(|err| err.into_inner()) = id;
+    *CURRENT_CAR_ID.lock().unwrap_or_else(|err| err.into_inner()) = id;
 }
 
 pub(crate) fn current_car_has_saved_calibration() -> bool {

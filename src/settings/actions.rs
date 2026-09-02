@@ -1,9 +1,12 @@
 use gpui::{Context, Window};
 
 use crate::config::{
-    DEFAULT_CALIBRATE_MS, DEFAULT_LISTEN_HOST, DEFAULT_LISTEN_PORT,
-    DEFAULT_SHIFT_LIGHTS_BLINK_PERCENT, DEFAULT_SHIFT_LIGHTS_DIM_OPACITY,
-    DEFAULT_SHIFT_LIGHTS_GAP_PX, DEFAULT_SHIFT_LIGHTS_LIT_OPACITY, DEFAULT_SHIFT_LIGHTS_OFFSET_PX,
+    DEFAULT_CALIBRATE_MS, DEFAULT_FORWARD_HOST, DEFAULT_FORWARD_PORT,
+    DEFAULT_GEAR_DISPLAY_DIM_OPACITY, DEFAULT_GEAR_DISPLAY_LIT_OPACITY,
+    DEFAULT_GEAR_DISPLAY_SIZE_PX, DEFAULT_GEAR_DISPLAY_X_RATIO, DEFAULT_GEAR_DISPLAY_Y_RATIO,
+    DEFAULT_LISTEN_HOST, DEFAULT_LISTEN_PORT, DEFAULT_SHIFT_LIGHTS_BLINK_PERCENT,
+    DEFAULT_SHIFT_LIGHTS_DIM_OPACITY, DEFAULT_SHIFT_LIGHTS_GAP_PX,
+    DEFAULT_SHIFT_LIGHTS_LIT_OPACITY, DEFAULT_SHIFT_LIGHTS_OFFSET_PX,
     DEFAULT_SHIFT_LIGHTS_THICKNESS_PX,
 };
 use crate::hud::{self, ShiftLightsDirection, ShiftLightsPosition};
@@ -19,10 +22,18 @@ impl Settings {
         cx.notify();
     }
 
+    pub(super) fn reset_charts_visible(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.set_charts_visible(false, cx);
+    }
+
     pub(super) fn set_only_show_in_game(&mut self, visible: bool, cx: &mut Context<Self>) {
         hud::set_only_show_in_game(visible);
         self.last_only_show_in_game = visible;
         cx.notify();
+    }
+
+    pub(super) fn reset_only_show_in_game(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.set_only_show_in_game(true, cx);
     }
 
     pub(super) fn set_calibrate_hint_visible(&mut self, visible: bool, cx: &mut Context<Self>) {
@@ -31,10 +42,26 @@ impl Settings {
         cx.notify();
     }
 
+    pub(super) fn reset_calibrate_hint_visible(
+        &mut self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.set_calibrate_hint_visible(false, cx);
+    }
+
     pub(super) fn set_strict_calibrate_conditions(&mut self, strict: bool, cx: &mut Context<Self>) {
         hud::set_strict_calibrate_conditions(strict);
         self.last_strict_calibrate_conditions = strict;
         cx.notify();
+    }
+
+    pub(super) fn reset_strict_calibrate_conditions(
+        &mut self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.set_strict_calibrate_conditions(false, cx);
     }
 
     pub(super) fn set_remember_calibrated_cars(&mut self, remember: bool, cx: &mut Context<Self>) {
@@ -42,6 +69,14 @@ impl Settings {
         self.last_remember_calibrated_cars = remember;
         self.last_has_saved_calibration = hud::current_car_has_saved_calibration();
         cx.notify();
+    }
+
+    pub(super) fn reset_remember_calibrated_cars(
+        &mut self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.set_remember_calibrated_cars(true, cx);
     }
 
     pub(super) fn reset_current_car_calibration(&mut self, cx: &mut Context<Self>) {
@@ -56,6 +91,14 @@ impl Settings {
         cx.notify();
     }
 
+    pub(super) fn reset_gear_display_visible(
+        &mut self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.set_gear_display_visible(true, cx);
+    }
+
     pub(super) fn set_shift_lights_position(
         &mut self,
         position: ShiftLightsPosition,
@@ -67,6 +110,14 @@ impl Settings {
         cx.notify();
     }
 
+    pub(super) fn reset_shift_lights_position(
+        &mut self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.set_shift_lights_position(ShiftLightsPosition::Top, cx);
+    }
+
     pub(super) fn set_shift_lights_direction(
         &mut self,
         direction: ShiftLightsDirection,
@@ -75,6 +126,17 @@ impl Settings {
         hud::set_shift_lights_direction(direction);
         self.last_shift_lights_direction = hud::shift_lights_direction();
         cx.notify();
+    }
+
+    pub(super) fn reset_shift_lights_direction(
+        &mut self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.set_shift_lights_direction(
+            ShiftLightsDirection::default_for(hud::shift_lights_position()),
+            cx,
+        );
     }
 
     pub(super) fn apply_listen_addr(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -131,6 +193,65 @@ impl Settings {
         cx.notify();
     }
 
+    pub(super) fn set_forward_enabled(&mut self, enabled: bool, cx: &mut Context<Self>) {
+        telemetry::set_forward_enabled(enabled);
+        cx.notify();
+    }
+
+    pub(super) fn apply_forward_addr(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let host = self.forward_host_input.read(cx).value().to_string();
+        let port = self.forward_port_input.read(cx).value().to_string();
+        match telemetry::parse_socket_addr(&host, &port) {
+            Ok(addr) => match telemetry::apply_forward_addr(addr) {
+                Ok(()) => {
+                    let (host, port) = telemetry::forward_host_port();
+                    self.forward_host_input.update(cx, |input, cx| {
+                        input.set_value(host, window, cx);
+                    });
+                    self.forward_port_input.update(cx, |input, cx| {
+                        input.set_value(port.to_string(), window, cx);
+                    });
+                    self.forward_addr_warning = None;
+                }
+                Err(err) => self.reset_forward_addr_invalid(window, cx, &err),
+            },
+            Err(err) => self.reset_forward_addr_invalid(window, cx, &err),
+        }
+        cx.notify();
+    }
+
+    fn forward_addr_warning_message(error: &str) -> &'static str {
+        if error.contains("端口") {
+            "端口无效，已恢复为默认值。"
+        } else if error.contains("相同") {
+            "转发地址不能与监听地址相同，已恢复为默认值。"
+        } else {
+            "转发地址无效，已恢复为默认值。"
+        }
+    }
+
+    fn reset_forward_addr_invalid(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        error: &str,
+    ) {
+        let warning = Self::forward_addr_warning_message(error);
+        self.reset_forward_addr(window, cx);
+        self.forward_addr_warning = Some(warning);
+    }
+
+    pub(super) fn reset_forward_addr(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.forward_host_input.update(cx, |input, cx| {
+            input.set_value(DEFAULT_FORWARD_HOST, window, cx);
+        });
+        self.forward_port_input.update(cx, |input, cx| {
+            input.set_value(DEFAULT_FORWARD_PORT.to_string(), window, cx);
+        });
+        telemetry::apply_default_forward();
+        cx.notify();
+    }
+
     pub(super) fn apply_calibrate_ms(&mut self, cx: &mut Context<Self>) {
         let value = self.calibrate_ms_input.read(cx).value().to_string();
         if let Ok(ms) = value.trim().parse::<usize>() {
@@ -144,6 +265,58 @@ impl Settings {
         if let Ok(size) = value.trim().parse::<usize>() {
             let _ = hud::set_gear_display_size_px(size);
         }
+        cx.notify();
+    }
+
+    pub(super) fn reset_gear_display_size(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.gear_display_size_input.update(cx, |input, cx| {
+            input.set_value(DEFAULT_GEAR_DISPLAY_SIZE_PX.to_string(), window, cx);
+        });
+        let _ = hud::set_gear_display_size_px(DEFAULT_GEAR_DISPLAY_SIZE_PX);
+        cx.notify();
+    }
+
+    pub(super) fn reset_gear_display_x(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let (_, y) = hud::gear_display_position_ratio();
+        let _ = hud::set_gear_display_position_ratio(DEFAULT_GEAR_DISPLAY_X_RATIO, y);
+        self.gear_display_x_slider.update(cx, |slider, cx| {
+            slider.set_value(DEFAULT_GEAR_DISPLAY_X_RATIO * 100.0, window, cx);
+        });
+        cx.notify();
+    }
+
+    pub(super) fn reset_gear_display_y(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let (x, _) = hud::gear_display_position_ratio();
+        let _ = hud::set_gear_display_position_ratio(x, DEFAULT_GEAR_DISPLAY_Y_RATIO);
+        self.gear_display_y_slider.update(cx, |slider, cx| {
+            slider.set_value(DEFAULT_GEAR_DISPLAY_Y_RATIO * 100.0, window, cx);
+        });
+        cx.notify();
+    }
+
+    pub(super) fn reset_gear_display_lit_opacity(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.gear_display_lit_opacity_slider
+            .update(cx, |slider, cx| {
+                slider.set_value(DEFAULT_GEAR_DISPLAY_LIT_OPACITY, window, cx);
+            });
+        let _ = hud::set_gear_display_lit_opacity(DEFAULT_GEAR_DISPLAY_LIT_OPACITY);
+        cx.notify();
+    }
+
+    pub(super) fn reset_gear_display_dim_opacity(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.gear_display_dim_opacity_slider
+            .update(cx, |slider, cx| {
+                slider.set_value(DEFAULT_GEAR_DISPLAY_DIM_OPACITY, window, cx);
+            });
+        let _ = hud::set_gear_display_dim_opacity(DEFAULT_GEAR_DISPLAY_DIM_OPACITY);
         cx.notify();
     }
 
@@ -280,6 +453,7 @@ impl Settings {
         user_config::reset_to_defaults();
         self.sync_controls_from_runtime(window, cx);
         self.listen_addr_warning = None;
+        self.forward_addr_warning = None;
         cx.notify();
     }
 
@@ -290,6 +464,13 @@ impl Settings {
         });
         self.port_input.update(cx, |input, cx| {
             input.set_value(port.to_string(), window, cx);
+        });
+        let (forward_host, forward_port) = telemetry::forward_host_port();
+        self.forward_host_input.update(cx, |input, cx| {
+            input.set_value(forward_host, window, cx);
+        });
+        self.forward_port_input.update(cx, |input, cx| {
+            input.set_value(forward_port.to_string(), window, cx);
         });
         self.calibrate_ms_input.update(cx, |input, cx| {
             input.set_value(hud::calibrate_ms().to_string(), window, cx);

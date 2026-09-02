@@ -23,10 +23,11 @@ impl Settings {
                     .text_color(colors.warning)
                     .child("此窗口拥有焦点时会暂时覆盖「仅游戏时显示」，强制显示 HUD，便于预览。失焦、离开此页或关闭设置后恢复。"),
             )
-            .child(Self::setting_row(
+            .child(self.setting_row_with_reset(
                 colors,
                 "仅游戏时显示",
                 "仅在游戏窗口位于前台时显示 HUD；与托盘右键菜单中的开关同步。",
+                "hud-only-show-in-game-reset",
                 self.switch_control(
                     "hud-only-show-in-game",
                     only_show_in_game,
@@ -34,11 +35,16 @@ impl Settings {
                     cx,
                     |this, visible, cx| this.set_only_show_in_game(visible, cx),
                 ),
+                !only_show_in_game,
+                None,
+                cx,
+                |this, window, cx| this.reset_only_show_in_game(window, cx),
             ))
-            .child(Self::setting_row(
+            .child(self.setting_row_with_reset(
                 colors,
                 "图表显示",
                 "与托盘右键菜单中的图表开关同步。",
+                "hud-charts-visible-reset",
                 self.switch_control(
                     "hud-charts-visible",
                     charts_visible,
@@ -46,6 +52,10 @@ impl Settings {
                     cx,
                     |this, visible, cx| this.set_charts_visible(visible, cx),
                 ),
+                charts_visible,
+                None,
+                cx,
+                |this, window, cx| this.reset_charts_visible(window, cx),
             ))
     }
 }

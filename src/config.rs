@@ -2,6 +2,8 @@
 pub(crate) const PACKET_SIZE: usize = 324;
 pub(crate) const DEFAULT_LISTEN_HOST: &str = "127.0.0.1";
 pub(crate) const DEFAULT_LISTEN_PORT: u16 = 9999;
+pub(crate) const DEFAULT_FORWARD_HOST: &str = "127.0.0.1";
+pub(crate) const DEFAULT_FORWARD_PORT: u16 = 10000;
 pub(crate) const ENGINE_MAX_RPM_OFFSET: usize = 8;
 pub(crate) const CURRENT_ENGINE_RPM_OFFSET: usize = 16;
 pub(crate) const POWER_OFFSET: usize = 260;

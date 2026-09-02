@@ -333,14 +333,14 @@ impl Settings {
             )
     }
 
-    pub(super) fn switch_control(
+    pub(super) fn switch_control<T: Fn(&mut Self, bool, &mut Context<Self>) + 'static>(
         &self,
         id: &'static str,
         checked: bool,
         colors: &Colors,
         cx: &mut Context<Self>,
-        on_toggle: impl Fn(&mut Self, bool, &mut Context<Self>) + 'static,
-    ) -> impl IntoElement {
+        on_toggle: T,
+    ) -> impl IntoElement + use<T> {
         let track_bg = if checked {
             colors.selected
         } else {
@@ -376,7 +376,7 @@ impl Settings {
         &self,
         colors: &Colors,
         cx: &mut Context<Self>,
-    ) -> impl IntoElement {
+    ) -> impl IntoElement + use<> {
         let selected = hud::shift_lights_position();
         div()
             .flex()
@@ -459,7 +459,7 @@ impl Settings {
         &self,
         colors: &Colors,
         cx: &mut Context<Self>,
-    ) -> impl IntoElement {
+    ) -> impl IntoElement + use<> {
         let position = hud::shift_lights_position();
         let selected = hud::shift_lights_direction();
         let (first_id, first_label, first_direction, second_id, second_label, second_direction) =

@@ -2,12 +2,15 @@ use gpui::{Context, IntoElement, div, prelude::*, px};
 use gpui_component::{Icon, Sizable, Size, input::Input, scroll::ScrollableElement};
 
 use crate::config::{
-    DEFAULT_CALIBRATE_MS, DEFAULT_LISTEN_HOST, DEFAULT_LISTEN_PORT,
-    DEFAULT_SHIFT_LIGHTS_BLINK_PERCENT, DEFAULT_SHIFT_LIGHTS_DIM_OPACITY,
-    DEFAULT_SHIFT_LIGHTS_GAP_PX, DEFAULT_SHIFT_LIGHTS_LIT_OPACITY, DEFAULT_SHIFT_LIGHTS_OFFSET_PX,
+    DEFAULT_CALIBRATE_MS, DEFAULT_FORWARD_HOST, DEFAULT_FORWARD_PORT,
+    DEFAULT_GEAR_DISPLAY_DIM_OPACITY, DEFAULT_GEAR_DISPLAY_LIT_OPACITY,
+    DEFAULT_GEAR_DISPLAY_SIZE_PX, DEFAULT_GEAR_DISPLAY_X_RATIO, DEFAULT_GEAR_DISPLAY_Y_RATIO,
+    DEFAULT_LISTEN_HOST, DEFAULT_LISTEN_PORT, DEFAULT_SHIFT_LIGHTS_BLINK_PERCENT,
+    DEFAULT_SHIFT_LIGHTS_DIM_OPACITY, DEFAULT_SHIFT_LIGHTS_GAP_PX,
+    DEFAULT_SHIFT_LIGHTS_LIT_OPACITY, DEFAULT_SHIFT_LIGHTS_OFFSET_PX,
     DEFAULT_SHIFT_LIGHTS_THICKNESS_PX, DEFAULT_SHIFT_LIGHTS_WIDTH_PERCENT,
 };
-use crate::hud;
+use crate::hud::{self, ShiftLightsDirection, ShiftLightsPosition};
 use crate::settings_section::SettingsSection;
 use crate::telemetry;
 
@@ -81,17 +84,28 @@ impl Settings {
                     "位置与方向",
                     "选择灯条贴在哪条屏幕边缘，以及转速升高时的点亮方向。",
                 )
-                .child(Self::setting_row(
+                .child(self.setting_row_with_reset(
                     colors,
                     "位置",
                     "可放在屏幕顶部、底部、左侧或右侧。",
+                    "shift-lights-position-reset",
                     self.position_control(colors, cx),
+                    hud::shift_lights_position() != ShiftLightsPosition::Top,
+                    None,
+                    cx,
+                    |this, window, cx| this.reset_shift_lights_position(window, cx),
                 ))
-                .child(Self::setting_row(
+                .child(self.setting_row_with_reset(
                     colors,
                     "方向",
                     direction_description,
+                    "shift-lights-direction-reset",
                     self.direction_control(colors, cx),
+                    hud::shift_lights_direction()
+                        != ShiftLightsDirection::default_for(hud::shift_lights_position()),
+                    None,
+                    cx,
+                    |this, window, cx| this.reset_shift_lights_direction(window, cx),
                 )),
             )
             .child(Self::separator(colors))
@@ -234,6 +248,49 @@ impl Settings {
                     .with_size(Size::Small),
             );
 
+        let forward_enabled = telemetry::forward_enabled();
+        let (forward_host, forward_port) = telemetry::forward_host_port();
+        let forward_uses_default = !forward_enabled
+            && forward_host == DEFAULT_FORWARD_HOST
+            && forward_port == DEFAULT_FORWARD_PORT;
+        let forward_dirty = self.input_differs(&self.forward_host_input, &forward_host, cx)
+            || self.input_differs(&self.forward_port_input, forward_port, cx);
+        let forward_warning = self.forward_addr_warning.or_else(|| {
+            (forward_enabled && telemetry::forward_addr() == telemetry::listen_addr())
+                .then_some("转发地址与监听地址相同，数据包不会被转发。")
+        });
+        let forward_control = div()
+            .flex()
+            .items_center()
+            .gap_2()
+            .child(self.switch_control(
+                "forward-enabled",
+                forward_enabled,
+                colors,
+                cx,
+                |this, enabled, cx| this.set_forward_enabled(enabled, cx),
+            ))
+            .when(forward_dirty, |el| {
+                el.child(self.action_button(
+                    "forward-apply",
+                    "确认",
+                    true,
+                    cx,
+                    |this, window, cx| this.apply_forward_addr(window, cx),
+                ))
+            })
+            .child(
+                Input::new(&self.forward_host_input)
+                    .w(px(148.))
+                    .with_size(Size::Small),
+            )
+            .child(div().text_sm().text_color(colors.disabled).child(":"))
+            .child(
+                Input::new(&self.forward_port_input)
+                    .w(px(72.))
+                    .with_size(Size::Small),
+            );
+
         div()
             .flex()
             .flex_col()
@@ -248,6 +305,17 @@ impl Settings {
                 self.listen_addr_warning,
                 cx,
                 |this, window, cx| this.reset_listen_addr(window, cx),
+            ))
+            .child(self.setting_row_with_reset(
+                colors,
+                "UDP 转发",
+                "开启后，将收到的游戏遥测数据包原样转发到指定地址，供其它应用使用。默认关闭，目标默认为 127.0.0.1:10000。",
+                "forward-reset",
+                forward_control,
+                !forward_uses_default,
+                forward_warning,
+                cx,
+                |this, window, cx| this.reset_forward_addr(window, cx),
             ))
     }
 
@@ -282,10 +350,11 @@ impl Settings {
                     .text_color(colors.warning)
                     .child("此窗口拥有焦点时会暂时覆盖「仅游戏时显示」，强制显示 HUD，便于预览。失焦、离开此页或关闭设置后恢复。"),
             )
-            .child(Self::setting_row(
+            .child(self.setting_row_with_reset(
                 colors,
                 "显示挡位表",
                 "在 HUD 上显示当前车辆挡位。",
+                "gear-display-visible-reset",
                 self.switch_control(
                     "gear-display-visible",
                     hud::gear_display_visible(),
@@ -293,6 +362,10 @@ impl Settings {
                     cx,
                     |this, visible, cx| this.set_gear_display_visible(visible, cx),
                 ),
+                !hud::gear_display_visible(),
+                None,
+                cx,
+                |this, window, cx| this.reset_gear_display_visible(window, cx),
             ))
             .child(self.opacity_slider_row(
                 "水平位置",
@@ -303,9 +376,9 @@ impl Settings {
                 None,
                 "%",
                 1,
-                false,
+                hud::gear_display_position_ratio().0 != DEFAULT_GEAR_DISPLAY_X_RATIO,
                 cx,
-                |_, _, _| {},
+                |this, window, cx| this.reset_gear_display_x(window, cx),
             ))
             .child(self.opacity_slider_row(
                 "垂直位置",
@@ -316,15 +389,20 @@ impl Settings {
                 None,
                 "%",
                 1,
-                false,
+                hud::gear_display_position_ratio().1 != DEFAULT_GEAR_DISPLAY_Y_RATIO,
                 cx,
-                |_, _, _| {},
+                |this, window, cx| this.reset_gear_display_y(window, cx),
             ))
-            .child(Self::setting_row(
+            .child(self.setting_row_with_reset(
                 colors,
                 "大小",
                 "七段数码管的高度，单位像素。",
+                "gear-display-size-reset",
                 size_control,
+                hud::gear_display_size_px() != DEFAULT_GEAR_DISPLAY_SIZE_PX,
+                None,
+                cx,
+                |this, window, cx| this.reset_gear_display_size(window, cx),
             ))
             .child(
                 self.opacity_slider_row(
@@ -337,9 +415,9 @@ impl Settings {
                         .then_some("亮起透明度低于熄灭透明度，可能影响挡位辨认。"),
                     "",
                     2,
-                    false,
+                    hud::gear_display_lit_opacity() != DEFAULT_GEAR_DISPLAY_LIT_OPACITY,
                     cx,
-                    |_, _, _| {},
+                    |this, window, cx| this.reset_gear_display_lit_opacity(window, cx),
                 ),
             )
             .child(
@@ -353,9 +431,9 @@ impl Settings {
                         .then_some("亮起透明度低于熄灭透明度，可能影响挡位辨认。"),
                     "",
                     2,
-                    false,
+                    hud::gear_display_dim_opacity() != DEFAULT_GEAR_DISPLAY_DIM_OPACITY,
                     cx,
-                    |_, _, _| {},
+                    |this, window, cx| this.reset_gear_display_dim_opacity(window, cx),
                 ),
             )
             .child(
@@ -388,10 +466,11 @@ impl Settings {
             .flex()
             .flex_col()
             .gap_3()
-            .child(Self::setting_row(
+            .child(self.setting_row_with_reset(
                 colors,
                 "校准提示",
                 "在 HUD 中央显示等待数据、校准说明与进度文字。",
+                "calibrate-hint-visible-reset",
                 self.switch_control(
                     "calibrate-hint-visible",
                     calibrate_hint_visible,
@@ -399,11 +478,16 @@ impl Settings {
                     cx,
                     |this, visible, cx| this.set_calibrate_hint_visible(visible, cx),
                 ),
+                calibrate_hint_visible,
+                None,
+                cx,
+                |this, window, cx| this.reset_calibrate_hint_visible(window, cx),
             ))
-            .child(Self::setting_row(
+            .child(self.setting_row_with_reset(
                 colors,
                 "更严格校准条件",
                 "开启后需同时按住手刹和油门才能校准；关闭后只需按住油门拉到断油转速。",
+                "strict-calibrate-conditions-reset",
                 self.switch_control(
                     "strict-calibrate-conditions",
                     hud::strict_calibrate_conditions(),
@@ -411,11 +495,16 @@ impl Settings {
                     cx,
                     |this, strict, cx| this.set_strict_calibrate_conditions(strict, cx),
                 ),
+                hud::strict_calibrate_conditions(),
+                None,
+                cx,
+                |this, window, cx| this.reset_strict_calibrate_conditions(window, cx),
             ))
-            .child(Self::setting_row(
+            .child(self.setting_row_with_reset(
                 colors,
                 "记住已校准车辆",
                 "开启后将断油转速按车辆写入配置，下次遇到同一车辆时自动恢复。关闭后不再读取或写入，已有记录会保留。",
+                "remember-calibrated-cars-reset",
                 self.switch_control(
                     "remember-calibrated-cars",
                     hud::remember_calibrated_cars(),
@@ -423,6 +512,10 @@ impl Settings {
                     cx,
                     |this, remember, cx| this.set_remember_calibrated_cars(remember, cx),
                 ),
+                !hud::remember_calibrated_cars(),
+                None,
+                cx,
+                |this, window, cx| this.reset_remember_calibrated_cars(window, cx),
             ))
             .child(self.setting_row_with_reset(
                 colors,

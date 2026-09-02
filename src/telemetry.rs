@@ -7,9 +7,9 @@ use std::time::Duration;
 
 use crate::config::{
     ACCEL_OFFSET, CAR_CLASS_OFFSET, CAR_ORDINAL_OFFSET, CAR_PERFORMANCE_INDEX_OFFSET,
-    CURRENT_ENGINE_RPM_OFFSET, CURRENT_GEAR_OFFSET, DEFAULT_LISTEN_HOST, DEFAULT_LISTEN_PORT,
-    ENGINE_MAX_RPM_OFFSET, HANDBRAKE_OFFSET, IS_RACE_ON_OFFSET, NUM_CYLINDERS_OFFSET, PACKET_SIZE,
-    POWER_OFFSET, TORQUE_OFFSET,
+    CURRENT_ENGINE_RPM_OFFSET, CURRENT_GEAR_OFFSET, DEFAULT_FORWARD_HOST, DEFAULT_FORWARD_PORT,
+    DEFAULT_LISTEN_HOST, DEFAULT_LISTEN_PORT, ENGINE_MAX_RPM_OFFSET, HANDBRAKE_OFFSET,
+    IS_RACE_ON_OFFSET, NUM_CYLINDERS_OFFSET, PACKET_SIZE, POWER_OFFSET, TORQUE_OFFSET,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -57,6 +57,15 @@ fn default_listen_addr() -> SocketAddr {
     )
 }
 
+fn default_forward_addr() -> SocketAddr {
+    SocketAddr::new(
+        DEFAULT_FORWARD_HOST
+            .parse()
+            .expect("DEFAULT_FORWARD_HOST must be a valid IP address"),
+        DEFAULT_FORWARD_PORT,
+    )
+}
+
 static QUEUE: OnceLock<Arc<Mutex<Vec<TelemetrySample>>>> = OnceLock::new();
 static STOP: AtomicBool = AtomicBool::new(false);
 static GENERATION: AtomicU64 = AtomicU64::new(0);
@@ -66,6 +75,11 @@ static ADDR: Mutex<SocketAddr> = Mutex::new(SocketAddr::V4(SocketAddrV4::new(
     DEFAULT_LISTEN_PORT,
 )));
 static BIND_ERROR: Mutex<Option<String>> = Mutex::new(None);
+static FORWARD_ENABLED: AtomicBool = AtomicBool::new(false);
+static FORWARD_ADDR: Mutex<SocketAddr> = Mutex::new(SocketAddr::V4(SocketAddrV4::new(
+    Ipv4Addr::LOCALHOST,
+    DEFAULT_FORWARD_PORT,
+)));
 
 pub(crate) fn listen_addr() -> SocketAddr {
     *ADDR.lock().unwrap()
@@ -88,11 +102,11 @@ pub(crate) fn listen_error() -> Option<String> {
     BIND_ERROR.lock().unwrap().clone()
 }
 
-pub(crate) fn parse_listen_addr(host: &str, port: &str) -> Result<SocketAddr, String> {
+pub(crate) fn parse_socket_addr(host: &str, port: &str) -> Result<SocketAddr, String> {
     let host = host.trim();
     let port = port.trim();
     if host.is_empty() {
-        return Err("请输入监听地址。".into());
+        return Err("请输入地址。".into());
     }
     if port.is_empty() {
         return Err("请输入端口。".into());
@@ -104,9 +118,30 @@ pub(crate) fn parse_listen_addr(host: &str, port: &str) -> Result<SocketAddr, St
         IpAddr::V4(Ipv4Addr::LOCALHOST)
     } else {
         host.parse::<IpAddr>()
-            .map_err(|_| "监听地址必须是有效的 IP。".to_string())?
+            .map_err(|_| "地址必须是有效的 IP。".to_string())?
     };
     Ok(SocketAddr::new(ip, port))
+}
+
+pub(crate) fn parse_listen_addr(host: &str, port: &str) -> Result<SocketAddr, String> {
+    parse_socket_addr(host, port)
+}
+
+pub(crate) fn forward_enabled() -> bool {
+    FORWARD_ENABLED.load(Ordering::Relaxed)
+}
+
+pub(crate) fn set_forward_enabled(enabled: bool) {
+    persist_if(FORWARD_ENABLED.swap(enabled, Ordering::Relaxed) != enabled);
+}
+
+pub(crate) fn forward_addr() -> SocketAddr {
+    *FORWARD_ADDR.lock().unwrap()
+}
+
+pub(crate) fn forward_host_port() -> (String, u16) {
+    let addr = forward_addr();
+    (addr.ip().to_string(), addr.port())
 }
 
 pub(crate) fn spawn_udp_listener() -> Arc<Mutex<Vec<TelemetrySample>>> {
@@ -156,6 +191,30 @@ pub(crate) fn configure_listen_addr(host: &str, port: u16) {
     }
 }
 
+pub(crate) fn apply_forward_addr(addr: SocketAddr) -> Result<(), String> {
+    if addr == listen_addr() {
+        return Err("转发地址不能与监听地址相同。".into());
+    }
+    let changed = addr != forward_addr();
+    set_forward_addr(addr);
+    persist_if(changed);
+    Ok(())
+}
+
+pub(crate) fn apply_default_forward() {
+    FORWARD_ENABLED.store(false, Ordering::Relaxed);
+    set_forward_addr(default_forward_addr());
+    crate::user_config::persist();
+}
+
+pub(crate) fn configure_forward(enabled: bool, host: &str, port: u16) {
+    FORWARD_ENABLED.store(enabled, Ordering::Relaxed);
+    match parse_socket_addr(host, &port.to_string()) {
+        Ok(addr) => set_forward_addr(addr),
+        Err(_) => set_forward_addr(default_forward_addr()),
+    }
+}
+
 fn bind_and_spawn(addr: SocketAddr, queue: Arc<Mutex<Vec<TelemetrySample>>>) {
     match open_socket(addr) {
         Ok(socket) => {
@@ -196,6 +255,7 @@ fn recv_loop(socket: UdpSocket, queue: Arc<Mutex<Vec<TelemetrySample>>>) {
         }
         match socket.recv(&mut buf) {
             Ok(n) => {
+                maybe_forward(&socket, &buf[..n]);
                 if let Some(sample) = parse_telemetry(&buf[..n]) {
                     queue.lock().unwrap().push(sample);
                 }
@@ -209,6 +269,27 @@ fn recv_loop(socket: UdpSocket, queue: Arc<Mutex<Vec<TelemetrySample>>>) {
 
 fn set_addr(addr: SocketAddr) {
     *ADDR.lock().unwrap() = addr;
+}
+
+fn set_forward_addr(addr: SocketAddr) {
+    *FORWARD_ADDR.lock().unwrap() = addr;
+}
+
+fn persist_if(changed: bool) {
+    if changed {
+        crate::user_config::persist();
+    }
+}
+
+fn maybe_forward(socket: &UdpSocket, buf: &[u8]) {
+    if buf.is_empty() || !FORWARD_ENABLED.load(Ordering::Relaxed) {
+        return;
+    }
+    let dest = forward_addr();
+    if dest == listen_addr() {
+        return;
+    }
+    let _ = socket.send_to(buf, dest);
 }
 
 fn set_error(error: Option<String>) {

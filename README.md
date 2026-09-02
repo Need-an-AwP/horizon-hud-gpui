@@ -38,6 +38,10 @@ cmd /c start "" "C:\Path\To\horizon-hud-gpui.exe" & %command%
 请修改为自己的horizon-hud文件路径，注意使用英文双引号和反斜杠。最简单的办法，右键你的`horizon-hud-gpui.exe`文件，复制文件地址，或者ctrl+shift+c，即可得到标准的路径。
 完成配置后horizon-hud即可自动跟随游戏启动。
 
+## 配置端口转发
+
+在设置中的遥测数据页启用udp转发即可与其它应用共享游戏遥测数据
+
 ## 从源码编译
 
 需要安装 [Rust](https://rustup.rs/)（edition 2024）以及 Windows SDK。

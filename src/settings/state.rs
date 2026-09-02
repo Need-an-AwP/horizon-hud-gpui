@@ -8,8 +8,9 @@ use gpui_component::{
 };
 
 use crate::config::{
-    DEFAULT_CALIBRATE_MS, DEFAULT_LISTEN_HOST, DEFAULT_LISTEN_PORT, DEFAULT_SHIFT_LIGHTS_GAP_PX,
-    DEFAULT_SHIFT_LIGHTS_OFFSET_PX, DEFAULT_SHIFT_LIGHTS_THICKNESS_PX,
+    DEFAULT_CALIBRATE_MS, DEFAULT_FORWARD_HOST, DEFAULT_FORWARD_PORT, DEFAULT_LISTEN_HOST,
+    DEFAULT_LISTEN_PORT, DEFAULT_SHIFT_LIGHTS_GAP_PX, DEFAULT_SHIFT_LIGHTS_OFFSET_PX,
+    DEFAULT_SHIFT_LIGHTS_THICKNESS_PX,
 };
 use crate::hud::{self};
 use crate::telemetry;
@@ -52,6 +53,17 @@ impl Settings {
             InputState::new(window, cx)
                 .placeholder(DEFAULT_LISTEN_PORT.to_string())
                 .default_value(port.to_string())
+        });
+        let (forward_host, forward_port) = telemetry::forward_host_port();
+        let forward_host_input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(DEFAULT_FORWARD_HOST)
+                .default_value(forward_host)
+        });
+        let forward_port_input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(DEFAULT_FORWARD_PORT.to_string())
+                .default_value(forward_port.to_string())
         });
         let calibrate_ms_input = cx.new(|cx| {
             InputState::new(window, cx)
@@ -230,6 +242,12 @@ impl Settings {
         subscribe_input(&port_input, |this, window, cx| {
             this.apply_listen_addr(window, cx);
         });
+        subscribe_input(&forward_host_input, |this, window, cx| {
+            this.apply_forward_addr(window, cx);
+        });
+        subscribe_input(&forward_port_input, |this, window, cx| {
+            this.apply_forward_addr(window, cx);
+        });
         subscribe_input(&calibrate_ms_input, |this, _, cx| {
             this.apply_calibrate_ms(cx);
         });
@@ -264,6 +282,9 @@ impl Settings {
             listen_addr_warning: None,
             host_input,
             port_input,
+            forward_addr_warning: None,
+            forward_host_input,
+            forward_port_input,
             calibrate_ms_input,
             shift_lights_lit_opacity_slider,
             shift_lights_dim_opacity_slider,

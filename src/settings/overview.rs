@@ -176,7 +176,9 @@ impl Settings {
                     .text_color(colors.selected_text)
                     .child("配置指南")
                     .on_click(cx.listener(move |_, _, _, _| {
-                        let _ = webbrowser::open("https://github.com/Need-an-AwP/horizon-hud-gpui?tab=readme-ov-file");
+                        let _ = webbrowser::open(
+                            "https://github.com/Need-an-AwP/horizon-hud-gpui?tab=readme-ov-file",
+                        );
                     })),
             )
     }
@@ -370,8 +372,7 @@ impl Settings {
                                         .bg(colors.background)
                                         .cursor_pointer()
                                         .tooltip(|window, cx| {
-                                            Tooltip::new("重置当前车辆的断油转速")
-                                                .build(window, cx)
+                                            Tooltip::new("重置当前车辆的断油转速").build(window, cx)
                                         })
                                         .hover(|style| style.bg(colors.warning))
                                         .on_click(cx.listener(|this, _, _, cx| {
