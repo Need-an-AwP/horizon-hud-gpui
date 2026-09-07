@@ -8,12 +8,14 @@ use crate::config::{
     DEFAULT_CALIBRATE_MS, DEFAULT_FORWARD_HOST, DEFAULT_FORWARD_PORT,
     DEFAULT_GEAR_DISPLAY_DIM_OPACITY, DEFAULT_GEAR_DISPLAY_LIT_OPACITY,
     DEFAULT_GEAR_DISPLAY_SIZE_PX, DEFAULT_GEAR_DISPLAY_X_RATIO, DEFAULT_GEAR_DISPLAY_Y_RATIO,
-    DEFAULT_LISTEN_HOST, DEFAULT_LISTEN_PORT, DEFAULT_SHIFT_LIGHTS_BLINK_PERCENT,
+    DEFAULT_LISTEN_HOST, DEFAULT_LISTEN_PORT, DEFAULT_SHIFT_LIGHTS_BLINK_MS,
+    DEFAULT_SHIFT_LIGHTS_BLINK_PERCENT,
+    DEFAULT_SHIFT_LIGHTS_CIRCLES_LIT_OPACITY, DEFAULT_SHIFT_LIGHTS_CIRCLES_OFFSET_PX,
     DEFAULT_SHIFT_LIGHTS_DIM_OPACITY, DEFAULT_SHIFT_LIGHTS_GAP_PX,
     DEFAULT_SHIFT_LIGHTS_LIT_OPACITY, DEFAULT_SHIFT_LIGHTS_OFFSET_PX,
     DEFAULT_SHIFT_LIGHTS_THICKNESS_PX, DEFAULT_SHIFT_LIGHTS_WIDTH_PERCENT,
 };
-use crate::hud::{self, ShiftLightsDirection, ShiftLightsPosition};
+use crate::hud::{self, ShiftLightsDirection, ShiftLightsPosition, ShiftLightsStyle};
 use crate::telemetry::{self, CarId};
 
 const CONFIG_FILE_NAME: &str = "horizon-hud.toml";
@@ -46,6 +48,37 @@ impl CalibratedCar {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct ShiftLightsLayout {
+    thickness_px: usize,
+    gap_px: usize,
+    width_percent: usize,
+    offset_px: usize,
+    lit_opacity: f32,
+}
+
+impl ShiftLightsLayout {
+    fn bar_default() -> Self {
+        Self {
+            thickness_px: DEFAULT_SHIFT_LIGHTS_THICKNESS_PX,
+            gap_px: DEFAULT_SHIFT_LIGHTS_GAP_PX,
+            width_percent: DEFAULT_SHIFT_LIGHTS_WIDTH_PERCENT,
+            offset_px: DEFAULT_SHIFT_LIGHTS_OFFSET_PX,
+            lit_opacity: DEFAULT_SHIFT_LIGHTS_LIT_OPACITY,
+        }
+    }
+
+    fn circles_default() -> Self {
+        Self {
+            thickness_px: DEFAULT_SHIFT_LIGHTS_THICKNESS_PX,
+            gap_px: DEFAULT_SHIFT_LIGHTS_GAP_PX,
+            width_percent: DEFAULT_SHIFT_LIGHTS_WIDTH_PERCENT,
+            offset_px: DEFAULT_SHIFT_LIGHTS_CIRCLES_OFFSET_PX,
+            lit_opacity: DEFAULT_SHIFT_LIGHTS_CIRCLES_LIT_OPACITY,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub(crate) struct UserConfig {
@@ -57,13 +90,26 @@ pub(crate) struct UserConfig {
     pub remember_calibrated_cars: bool,
     pub shift_lights_position: ShiftLightsPosition,
     pub shift_lights_direction: ShiftLightsDirection,
+    pub shift_lights_style: ShiftLightsStyle,
     pub shift_lights_lit_opacity: f32,
     pub shift_lights_dim_opacity: f32,
     pub shift_lights_offset_px: usize,
     pub shift_lights_thickness_px: usize,
     pub shift_lights_gap_px: usize,
     pub shift_lights_width_percent: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shift_lights_circles_thickness_px: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shift_lights_circles_gap_px: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shift_lights_circles_width_percent: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shift_lights_circles_offset_px: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shift_lights_circles_lit_opacity: Option<f32>,
     pub shift_lights_blink_percent: f32,
+    #[serde(default = "default_shift_lights_blink_ms")]
+    pub shift_lights_blink_ms: usize,
     pub gear_display_visible: bool,
     pub gear_display_x_ratio: f32,
     pub gear_display_y_ratio: f32,
@@ -90,13 +136,20 @@ impl Default for UserConfig {
             remember_calibrated_cars: true,
             shift_lights_position: ShiftLightsPosition::Top,
             shift_lights_direction: ShiftLightsDirection::LeftToRight,
+            shift_lights_style: ShiftLightsStyle::Bar,
             shift_lights_lit_opacity: DEFAULT_SHIFT_LIGHTS_LIT_OPACITY,
             shift_lights_dim_opacity: DEFAULT_SHIFT_LIGHTS_DIM_OPACITY,
             shift_lights_offset_px: DEFAULT_SHIFT_LIGHTS_OFFSET_PX,
             shift_lights_thickness_px: DEFAULT_SHIFT_LIGHTS_THICKNESS_PX,
             shift_lights_gap_px: DEFAULT_SHIFT_LIGHTS_GAP_PX,
             shift_lights_width_percent: DEFAULT_SHIFT_LIGHTS_WIDTH_PERCENT,
+            shift_lights_circles_thickness_px: Some(DEFAULT_SHIFT_LIGHTS_THICKNESS_PX),
+            shift_lights_circles_gap_px: Some(DEFAULT_SHIFT_LIGHTS_GAP_PX),
+            shift_lights_circles_width_percent: Some(DEFAULT_SHIFT_LIGHTS_WIDTH_PERCENT),
+            shift_lights_circles_offset_px: Some(DEFAULT_SHIFT_LIGHTS_CIRCLES_OFFSET_PX),
+            shift_lights_circles_lit_opacity: Some(DEFAULT_SHIFT_LIGHTS_CIRCLES_LIT_OPACITY),
             shift_lights_blink_percent: DEFAULT_SHIFT_LIGHTS_BLINK_PERCENT,
+            shift_lights_blink_ms: DEFAULT_SHIFT_LIGHTS_BLINK_MS,
             gear_display_visible: true,
             gear_display_x_ratio: DEFAULT_GEAR_DISPLAY_X_RATIO,
             gear_display_y_ratio: DEFAULT_GEAR_DISPLAY_Y_RATIO,
@@ -127,13 +180,30 @@ impl UserConfig {
             remember_calibrated_cars: hud::remember_calibrated_cars(),
             shift_lights_position: hud::shift_lights_position(),
             shift_lights_direction: hud::shift_lights_direction(),
-            shift_lights_lit_opacity: hud::shift_lights_lit_opacity(),
+            shift_lights_style: hud::shift_lights_style(),
+            shift_lights_lit_opacity: hud::shift_lights_lit_opacity_for(ShiftLightsStyle::Bar),
             shift_lights_dim_opacity: hud::shift_lights_dim_opacity(),
-            shift_lights_offset_px: hud::shift_lights_offset_px(),
-            shift_lights_thickness_px: hud::shift_lights_thickness_px(),
-            shift_lights_gap_px: hud::shift_lights_gap_px(),
-            shift_lights_width_percent: hud::shift_lights_width_percent(),
+            shift_lights_offset_px: hud::shift_lights_offset_px_for(ShiftLightsStyle::Bar),
+            shift_lights_thickness_px: hud::shift_lights_thickness_px_for(ShiftLightsStyle::Bar),
+            shift_lights_gap_px: hud::shift_lights_gap_px_for(ShiftLightsStyle::Bar),
+            shift_lights_width_percent: hud::shift_lights_width_percent_for(ShiftLightsStyle::Bar),
+            shift_lights_circles_thickness_px: Some(hud::shift_lights_thickness_px_for(
+                ShiftLightsStyle::SymmetricCircles,
+            )),
+            shift_lights_circles_gap_px: Some(hud::shift_lights_gap_px_for(
+                ShiftLightsStyle::SymmetricCircles,
+            )),
+            shift_lights_circles_width_percent: Some(hud::shift_lights_width_percent_for(
+                ShiftLightsStyle::SymmetricCircles,
+            )),
+            shift_lights_circles_offset_px: Some(hud::shift_lights_offset_px_for(
+                ShiftLightsStyle::SymmetricCircles,
+            )),
+            shift_lights_circles_lit_opacity: Some(hud::shift_lights_lit_opacity_for(
+                ShiftLightsStyle::SymmetricCircles,
+            )),
             shift_lights_blink_percent: hud::shift_lights_blink_percent(),
+            shift_lights_blink_ms: hud::shift_lights_blink_ms(),
             gear_display_visible: hud::gear_display_visible(),
             gear_display_x_ratio,
             gear_display_y_ratio,
@@ -159,13 +229,31 @@ impl UserConfig {
         hud::set_gear_display_visible(self.gear_display_visible);
         hud::set_shift_lights_position(self.shift_lights_position);
         hud::set_shift_lights_direction(self.shift_lights_direction);
-        let _ = hud::set_shift_lights_lit_opacity(self.shift_lights_lit_opacity);
+        hud::set_shift_lights_style(self.shift_lights_style);
+        let bar = self.bar_shift_lights_layout();
+        let circles = self.circles_shift_lights_layout();
+        let _ = hud::set_shift_lights_lit_opacity_for(ShiftLightsStyle::Bar, bar.lit_opacity);
+        let _ = hud::set_shift_lights_lit_opacity_for(
+            ShiftLightsStyle::SymmetricCircles,
+            circles.lit_opacity,
+        );
         let _ = hud::set_shift_lights_dim_opacity(self.shift_lights_dim_opacity);
-        hud::set_shift_lights_offset_px(self.shift_lights_offset_px);
-        let _ = hud::set_shift_lights_thickness_px(self.shift_lights_thickness_px);
-        hud::set_shift_lights_gap_px(self.shift_lights_gap_px);
-        let _ = hud::set_shift_lights_width_percent(self.shift_lights_width_percent);
+        hud::set_shift_lights_offset_px_for(ShiftLightsStyle::Bar, bar.offset_px);
+        hud::set_shift_lights_offset_px_for(ShiftLightsStyle::SymmetricCircles, circles.offset_px);
+        let _ = hud::set_shift_lights_thickness_px_for(ShiftLightsStyle::Bar, bar.thickness_px);
+        hud::set_shift_lights_gap_px_for(ShiftLightsStyle::Bar, bar.gap_px);
+        let _ = hud::set_shift_lights_width_percent_for(ShiftLightsStyle::Bar, bar.width_percent);
+        let _ = hud::set_shift_lights_thickness_px_for(
+            ShiftLightsStyle::SymmetricCircles,
+            circles.thickness_px,
+        );
+        hud::set_shift_lights_gap_px_for(ShiftLightsStyle::SymmetricCircles, circles.gap_px);
+        let _ = hud::set_shift_lights_width_percent_for(
+            ShiftLightsStyle::SymmetricCircles,
+            circles.width_percent,
+        );
         let _ = hud::set_shift_lights_blink_percent(self.shift_lights_blink_percent);
+        let _ = hud::set_shift_lights_blink_ms(self.shift_lights_blink_ms);
         let _ = hud::set_gear_display_position_ratio(
             self.gear_display_x_ratio,
             self.gear_display_y_ratio,
@@ -177,6 +265,82 @@ impl UserConfig {
         telemetry::configure_listen_addr(&self.listen_host, self.listen_port);
         telemetry::configure_forward(self.forward_enabled, &self.forward_host, self.forward_port);
         set_calibrated_cars(self.calibrated_cars.clone());
+    }
+
+    fn bar_shift_lights_layout(&self) -> ShiftLightsLayout {
+        ShiftLightsLayout {
+            thickness_px: self.shift_lights_thickness_px,
+            gap_px: self.shift_lights_gap_px,
+            width_percent: self.shift_lights_width_percent,
+            offset_px: self.shift_lights_offset_px,
+            lit_opacity: self.shift_lights_lit_opacity,
+        }
+    }
+
+    fn circles_shift_lights_layout(&self) -> ShiftLightsLayout {
+        ShiftLightsLayout {
+            thickness_px: self
+                .shift_lights_circles_thickness_px
+                .unwrap_or(DEFAULT_SHIFT_LIGHTS_THICKNESS_PX),
+            gap_px: self
+                .shift_lights_circles_gap_px
+                .unwrap_or(DEFAULT_SHIFT_LIGHTS_GAP_PX),
+            width_percent: self
+                .shift_lights_circles_width_percent
+                .unwrap_or(DEFAULT_SHIFT_LIGHTS_WIDTH_PERCENT),
+            offset_px: self
+                .shift_lights_circles_offset_px
+                .unwrap_or(DEFAULT_SHIFT_LIGHTS_CIRCLES_OFFSET_PX),
+            lit_opacity: self
+                .shift_lights_circles_lit_opacity
+                .unwrap_or(DEFAULT_SHIFT_LIGHTS_CIRCLES_LIT_OPACITY),
+        }
+    }
+
+    fn migrate_legacy_shift_lights(&mut self) {
+        let has_circles_layout = self.shift_lights_circles_thickness_px.is_some()
+            || self.shift_lights_circles_gap_px.is_some()
+            || self.shift_lights_circles_width_percent.is_some()
+            || self.shift_lights_circles_offset_px.is_some()
+            || self.shift_lights_circles_lit_opacity.is_some();
+        if has_circles_layout {
+            return;
+        }
+
+        if self.shift_lights_style.is_symmetric_circles() {
+            let circles = ShiftLightsLayout {
+                thickness_px: self.shift_lights_thickness_px,
+                gap_px: self.shift_lights_gap_px,
+                width_percent: self.shift_lights_width_percent,
+                offset_px: self.shift_lights_offset_px,
+                lit_opacity: self.shift_lights_lit_opacity,
+            };
+            let bar = ShiftLightsLayout::bar_default();
+            self.apply_shift_lights_layout(ShiftLightsStyle::Bar, bar);
+            self.apply_shift_lights_layout(ShiftLightsStyle::SymmetricCircles, circles);
+        } else {
+            let circles = ShiftLightsLayout::circles_default();
+            self.apply_shift_lights_layout(ShiftLightsStyle::SymmetricCircles, circles);
+        }
+    }
+
+    fn apply_shift_lights_layout(&mut self, style: ShiftLightsStyle, layout: ShiftLightsLayout) {
+        match style {
+            ShiftLightsStyle::Bar => {
+                self.shift_lights_thickness_px = layout.thickness_px;
+                self.shift_lights_gap_px = layout.gap_px;
+                self.shift_lights_width_percent = layout.width_percent;
+                self.shift_lights_offset_px = layout.offset_px;
+                self.shift_lights_lit_opacity = layout.lit_opacity;
+            }
+            ShiftLightsStyle::SymmetricCircles => {
+                self.shift_lights_circles_thickness_px = Some(layout.thickness_px);
+                self.shift_lights_circles_gap_px = Some(layout.gap_px);
+                self.shift_lights_circles_width_percent = Some(layout.width_percent);
+                self.shift_lights_circles_offset_px = Some(layout.offset_px);
+                self.shift_lights_circles_lit_opacity = Some(layout.lit_opacity);
+            }
+        }
     }
 }
 
@@ -205,6 +369,10 @@ pub(crate) fn reset_to_defaults() {
 
 fn default_true() -> bool {
     true
+}
+
+fn default_shift_lights_blink_ms() -> usize {
+    DEFAULT_SHIFT_LIGHTS_BLINK_MS
 }
 
 fn calibrated_cars() -> Vec<CalibratedCar> {
@@ -280,7 +448,8 @@ fn load() -> UserConfig {
             continue;
         }
         match confy::load_path::<UserConfig>(&path) {
-            Ok(cfg) => {
+            Ok(mut cfg) => {
+                cfg.migrate_legacy_shift_lights();
                 set_active_path(Some(path));
                 return cfg;
             }

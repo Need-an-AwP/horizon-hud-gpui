@@ -84,7 +84,9 @@ pub(super) fn sync(cx: &mut App) {
     let Some(settings) = cx.try_global::<OpenSettings>().map(|open| open.0.clone()) else {
         return;
     };
-    settings.update(cx, |this, cx| {
-        this.sync_hud_settings(cx);
+    let _ = handle.update(cx, |_, window, cx| {
+        settings.update(cx, |this, cx| {
+            this.sync_hud_settings(window, cx);
+        });
     });
 }

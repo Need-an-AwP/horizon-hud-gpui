@@ -22,14 +22,19 @@ pub(crate) const HISTORY_LEN: usize = SAMPLE_HZ * 5;
 
 // Shift lights
 pub(crate) const DEFAULT_SHIFT_LIGHTS_LIT_OPACITY: f32 = 0.7;
+pub(crate) const DEFAULT_SHIFT_LIGHTS_CIRCLES_LIT_OPACITY: f32 = 0.85;
 pub(crate) const DEFAULT_SHIFT_LIGHTS_DIM_OPACITY: f32 = 0.5;
 pub(crate) const DEFAULT_SHIFT_LIGHTS_OFFSET_PX: usize = 0;
+pub(crate) const DEFAULT_SHIFT_LIGHTS_CIRCLES_OFFSET_PX: usize = 5;
 pub(crate) const DEFAULT_SHIFT_LIGHTS_THICKNESS_PX: usize = 40;
 pub(crate) const DEFAULT_SHIFT_LIGHTS_GAP_PX: usize = 8;
 pub(crate) const DEFAULT_SHIFT_LIGHTS_WIDTH_PERCENT: usize = 75;
 pub(crate) const DEFAULT_SHIFT_LIGHTS_BLINK_PERCENT: f32 = 95.0;
 pub(crate) const SHIFT_LIGHTS_BLINK_PERCENT_MIN: f32 = 80.0;
 pub(crate) const SHIFT_LIGHTS_BLINK_PERCENT_MAX: f32 = 100.0;
+pub(crate) const DEFAULT_SHIFT_LIGHTS_BLINK_MS: usize = 80;
+pub(crate) const SHIFT_LIGHTS_BLINK_MS_MIN: usize = 20;
+pub(crate) const SHIFT_LIGHTS_BLINK_MS_MAX: usize = 200;
 
 // Gear display
 pub(crate) const CURRENT_GEAR_OFFSET: usize = 319;

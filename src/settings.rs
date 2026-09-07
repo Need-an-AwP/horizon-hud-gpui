@@ -1,9 +1,9 @@
 use std::sync::atomic::{AtomicU8, Ordering};
 
 use gpui::{App, Entity, colors::DefaultAppearance};
-use gpui_component::{input::InputState, slider::SliderState};
+use gpui_component::{input::InputState, select::SelectState, slider::SliderState};
 
-use crate::hud::{ShiftLightsDirection, ShiftLightsPosition};
+use crate::hud::{ShiftLightsDirection, ShiftLightsPosition, ShiftLightsStyle};
 use crate::settings_section::SettingsSection;
 
 const OPEN_IDLE: u8 = 0;
@@ -33,6 +33,7 @@ pub(crate) struct Settings {
     last_remember_calibrated_cars: bool,
     last_shift_lights_position: ShiftLightsPosition,
     last_shift_lights_direction: ShiftLightsDirection,
+    last_shift_lights_style: ShiftLightsStyle,
     last_shift_lights_calibrated: bool,
     last_electric_car: bool,
     last_has_saved_calibration: bool,
@@ -53,6 +54,8 @@ pub(crate) struct Settings {
     shift_lights_gap_input: Entity<InputState>,
     shift_lights_width_slider: Entity<SliderState>,
     shift_lights_blink_slider: Entity<SliderState>,
+    shift_lights_blink_ms_slider: Entity<SliderState>,
+    shift_lights_style_select: Entity<SelectState<Vec<ShiftLightsStyle>>>,
     gear_display_x_slider: Entity<SliderState>,
     gear_display_y_slider: Entity<SliderState>,
     gear_display_size_input: Entity<InputState>,

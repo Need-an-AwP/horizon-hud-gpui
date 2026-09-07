@@ -4,7 +4,9 @@ use gpui::{
 };
 
 use crate::config::HISTORY_LEN;
-use crate::hud::{CalibrateProgressDirection, RpmHud, ShiftLightsDirection, ShiftLightsPosition};
+use crate::hud::{
+    CalibrateProgressDirection, RpmHud, ShiftLightsDirection, ShiftLightsPosition, ShiftLightsStyle,
+};
 use crate::telemetry;
 
 fn signed_history_chart(
@@ -126,8 +128,14 @@ fn paint_level_line(
 }
 
 const RPM_LIGHT_COUNT: usize = 5;
-const RPM_LIGHT_BLINK_MS: u128 = 80;
+const RPM_CIRCLE_COUNT: usize = 16;
+const RPM_CIRCLE_HALF: usize = 8;
 const RPM_LIGHT_COLORS: [u32; RPM_LIGHT_COUNT] = [0x22cc44, 0x22cc44, 0xffcc22, 0xffcc22, 0xff3333];
+const RPM_CIRCLE_COLORS: [u32; RPM_CIRCLE_COUNT] = [
+    0x22cc44, 0x22cc44, 0x22cc44, 0xffcc22, 0xffcc22, 0xffcc22, 0xff3333, 0xff3333, 0xff3333,
+    0xff3333, 0xffcc22, 0xffcc22, 0xffcc22, 0x22cc44, 0x22cc44, 0x22cc44,
+];
+const RPM_LIGHT_BLINK_BLUE: u32 = 0x3399ff;
 const RPM_LIGHT_UNCALIBRATED: u32 = 0xffcc22;
 const RPM_LIGHT_CALIBRATING: u32 = 0x22cc44;
 const SEGMENT_DIM_COLOR: u32 = 0xffffff;
@@ -279,9 +287,10 @@ fn gear_display(
 }
 
 fn shift_blink_on() -> bool {
+    let blink_ms = crate::hud::shift_lights_blink_ms().max(1) as u128;
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| (d.as_millis() / RPM_LIGHT_BLINK_MS) % 2 == 0)
+        .map(|d| (d.as_millis() / blink_ms) % 2 == 0)
         .unwrap_or(true)
 }
 
@@ -320,13 +329,60 @@ fn shift_light_cell(position: ShiftLightsPosition, thickness: f32, color: gpui::
     }
 }
 
+fn shift_light_circle(diameter: f32, color: gpui::Rgba) -> gpui::Div {
+    div()
+        .flex_none()
+        .w(px(diameter))
+        .h(px(diameter))
+        .rounded_full()
+        .bg(color)
+}
+
+fn shift_circle_strip(
+    position: ShiftLightsPosition,
+    diameter: f32,
+    gap: f32,
+    cells: impl IntoIterator<Item = impl IntoElement>,
+) -> gpui::Div {
+    match position {
+        ShiftLightsPosition::Left | ShiftLightsPosition::Right => div()
+            .flex()
+            .flex_col()
+            .h_full()
+            .w(px(diameter))
+            .gap(px(gap))
+            .justify_center()
+            .items_center()
+            .children(cells),
+        ShiftLightsPosition::Bottom | ShiftLightsPosition::Top => div()
+            .flex()
+            .flex_row()
+            .w_full()
+            .gap(px(gap))
+            .justify_center()
+            .items_center()
+            .children(cells),
+    }
+}
+
+fn shift_light_on_count(ratio: f32, blink_frac: f32, count: usize) -> (usize, bool) {
+    if ratio > blink_frac {
+        (count, true)
+    } else {
+        let on = ((ratio / blink_frac) * count as f32)
+            .floor()
+            .clamp(0.0, count as f32) as usize;
+        (on, false)
+    }
+}
+
 fn with_opacity(color: u32, opacity: f32) -> gpui::Rgba {
     let alpha = (opacity.clamp(0.0, 1.0) * 255.0).round() as u32;
     rgba((color << 8) | alpha)
 }
 
-fn calibrate_segment_fill(progress: f32, index: usize) -> f32 {
-    let n = RPM_LIGHT_COUNT as f32;
+fn calibrate_segment_fill(progress: f32, index: usize, count: usize) -> f32 {
+    let n = count as f32;
     let start = index as f32 / n;
     let end = (index + 1) as f32 / n;
     ((progress - start) / (end - start).max(f32::EPSILON)).clamp(0.0, 1.0)
@@ -383,11 +439,17 @@ fn calibrate_progress_cell(
     }
 }
 
-fn rpm_shift_lights(
+fn calibrate_progress(calibrate: Option<(f32, f32)>) -> f32 {
+    match calibrate {
+        Some((elapsed, duration)) if duration > 0.0 => (elapsed / duration).clamp(0.0, 1.0),
+        _ => 0.0,
+    }
+}
+
+fn rpm_bar_shift_lights(
     rpm: f32,
     fuel_cut: Option<f32>,
     calibrate: Option<(f32, f32)>,
-    _calibrate_direction: CalibrateProgressDirection,
     position: ShiftLightsPosition,
     direction: ShiftLightsDirection,
     lit_opacity: f32,
@@ -395,20 +457,10 @@ fn rpm_shift_lights(
     blink_frac: f32,
     thickness: f32,
     gap: f32,
-) -> impl IntoElement {
+) -> gpui::Div {
     match fuel_cut {
         Some(max) if max > 0.0 => {
-            let (on_count, flash) = {
-                let ratio = rpm / max;
-                if ratio > blink_frac {
-                    (RPM_LIGHT_COUNT, true)
-                } else {
-                    let on = ((ratio / blink_frac) * RPM_LIGHT_COUNT as f32)
-                        .floor()
-                        .clamp(0.0, RPM_LIGHT_COUNT as f32) as usize;
-                    (on, false)
-                }
-            };
+            let (on_count, flash) = shift_light_on_count(rpm / max, blink_frac, RPM_LIGHT_COUNT);
             let lit = !flash || shift_blink_on();
             let reverse = direction.reverses_visual_order();
             shift_light_strip(
@@ -427,10 +479,7 @@ fn rpm_shift_lights(
             )
         }
         _ => {
-            let progress = match calibrate {
-                Some((elapsed, duration)) if duration > 0.0 => (elapsed / duration).clamp(0.0, 1.0),
-                _ => 0.0,
-            };
+            let progress = calibrate_progress(calibrate);
             let reverse = direction.reverses_visual_order();
             let vertical = matches!(
                 position,
@@ -442,11 +491,108 @@ fn rpm_shift_lights(
                 gap,
                 (0..RPM_LIGHT_COUNT).map(|i| {
                     let rpm_index = if reverse { RPM_LIGHT_COUNT - 1 - i } else { i };
-                    let fill = calibrate_segment_fill(progress, rpm_index);
+                    let fill = calibrate_segment_fill(progress, rpm_index, RPM_LIGHT_COUNT);
                     calibrate_progress_cell(fill, reverse, vertical, lit_opacity, thickness)
                 }),
             )
         }
+    }
+}
+
+fn rpm_circle_shift_lights(
+    rpm: f32,
+    fuel_cut: Option<f32>,
+    calibrate: Option<(f32, f32)>,
+    position: ShiftLightsPosition,
+    lit_opacity: f32,
+    dim_opacity: f32,
+    blink_frac: f32,
+    diameter: f32,
+    gap: f32,
+) -> gpui::Div {
+    match fuel_cut {
+        Some(max) if max > 0.0 => {
+            let (on_count, flash) = shift_light_on_count(rpm / max, blink_frac, RPM_CIRCLE_HALF);
+            let lit = !flash || shift_blink_on();
+            shift_circle_strip(
+                position,
+                diameter,
+                gap,
+                (0..RPM_CIRCLE_COUNT).map(move |i| {
+                    let rpm_index = i.min(RPM_CIRCLE_COUNT - 1 - i);
+                    let color = if lit && rpm_index < on_count {
+                        let rgb = if flash {
+                            RPM_LIGHT_BLINK_BLUE
+                        } else {
+                            RPM_CIRCLE_COLORS[i]
+                        };
+                        with_opacity(rgb, lit_opacity)
+                    } else {
+                        with_opacity(0x2a2a2a, dim_opacity)
+                    };
+                    shift_light_circle(diameter, color)
+                }),
+            )
+        }
+        _ => {
+            let progress = calibrate_progress(calibrate);
+            shift_circle_strip(
+                position,
+                diameter,
+                gap,
+                (0..RPM_CIRCLE_COUNT).map(|i| {
+                    let pair = i.min(RPM_CIRCLE_COUNT - 1 - i);
+                    let fill = calibrate_segment_fill(progress, pair, RPM_CIRCLE_HALF);
+                    let rgb = if fill >= 1.0 {
+                        RPM_LIGHT_CALIBRATING
+                    } else {
+                        RPM_LIGHT_UNCALIBRATED
+                    };
+                    shift_light_circle(diameter, with_opacity(rgb, lit_opacity))
+                }),
+            )
+        }
+    }
+}
+
+fn rpm_shift_lights(
+    rpm: f32,
+    fuel_cut: Option<f32>,
+    calibrate: Option<(f32, f32)>,
+    _calibrate_direction: CalibrateProgressDirection,
+    position: ShiftLightsPosition,
+    direction: ShiftLightsDirection,
+    style: ShiftLightsStyle,
+    lit_opacity: f32,
+    dim_opacity: f32,
+    blink_frac: f32,
+    thickness: f32,
+    gap: f32,
+) -> impl IntoElement {
+    match style {
+        ShiftLightsStyle::Bar => rpm_bar_shift_lights(
+            rpm,
+            fuel_cut,
+            calibrate,
+            position,
+            direction,
+            lit_opacity,
+            dim_opacity,
+            blink_frac,
+            thickness,
+            gap,
+        ),
+        ShiftLightsStyle::SymmetricCircles => rpm_circle_shift_lights(
+            rpm,
+            fuel_cut,
+            calibrate,
+            position,
+            lit_opacity,
+            dim_opacity,
+            blink_frac,
+            thickness,
+            gap,
+        ),
     }
 }
 
@@ -526,6 +672,7 @@ impl Render for RpmHud {
         let show_charts = self.charts_visible();
         let lights_position = self.shift_lights_position();
         let lights_direction = self.shift_lights_direction();
+        let lights_style = self.shift_lights_style();
         let lights_lit_opacity = self.shift_lights_lit_opacity();
         let lights_dim_opacity = self.shift_lights_dim_opacity();
         let lights_offset = px(self.shift_lights_offset_px() as f32);
@@ -577,6 +724,7 @@ impl Render for RpmHud {
                         self.calibrate_progress_direction(),
                         lights_position,
                         lights_direction,
+                        lights_style,
                         lights_lit_opacity,
                         lights_dim_opacity,
                         lights_blink_frac,

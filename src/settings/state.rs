@@ -2,8 +2,9 @@ use gpui::{AppContext, Context, Entity, Window, colors::DefaultAppearance};
 
 use super::colors::Colors;
 use gpui_component::{
-    Icon, IconName, Theme, ThemeMode,
+    Icon, IconName, IndexPath, Theme, ThemeMode,
     input::{InputEvent, InputState},
+    select::{SelectEvent, SelectState},
     slider::{SliderEvent, SliderState, SliderValue},
 };
 
@@ -12,7 +13,7 @@ use crate::config::{
     DEFAULT_LISTEN_PORT, DEFAULT_SHIFT_LIGHTS_GAP_PX, DEFAULT_SHIFT_LIGHTS_OFFSET_PX,
     DEFAULT_SHIFT_LIGHTS_THICKNESS_PX,
 };
-use crate::hud::{self};
+use crate::hud::{self, ShiftLightsStyle};
 use crate::telemetry;
 
 use super::{Settings, SettingsSection};
@@ -137,6 +138,18 @@ impl Settings {
             },
         )
         .detach();
+        let style = hud::shift_lights_style();
+        let shift_lights_style_select = cx.new(|cx| {
+            SelectState::new(
+                vec![ShiftLightsStyle::Bar, ShiftLightsStyle::SymmetricCircles],
+                Some(IndexPath::new(match style {
+                    ShiftLightsStyle::Bar => 0,
+                    ShiftLightsStyle::SymmetricCircles => 1,
+                })),
+                window,
+                cx,
+            )
+        });
         let shift_lights_blink_slider = cx.new(|_| {
             SliderState::new()
                 .min(crate::config::SHIFT_LIGHTS_BLINK_PERCENT_MIN)
@@ -150,6 +163,24 @@ impl Settings {
                 if let SliderEvent::Change(SliderValue::Single(percent)) = event {
                     hud::set_shift_lights_blink_percent(*percent)
                         .expect("shift lights blink slider value must be valid");
+                    cx.notify();
+                }
+            },
+        )
+        .detach();
+        let shift_lights_blink_ms_slider = cx.new(|_| {
+            SliderState::new()
+                .min(crate::config::SHIFT_LIGHTS_BLINK_MS_MIN as f32)
+                .max(crate::config::SHIFT_LIGHTS_BLINK_MS_MAX as f32)
+                .step(5.0)
+                .default_value(hud::shift_lights_blink_ms() as f32)
+        });
+        cx.subscribe(
+            &shift_lights_blink_ms_slider,
+            |_this, _slider, event: &SliderEvent, cx| {
+                if let SliderEvent::Change(SliderValue::Single(blink_ms)) = event {
+                    hud::set_shift_lights_blink_ms(*blink_ms as usize)
+                        .expect("shift lights blink speed slider value must be valid");
                     cx.notify();
                 }
             },
@@ -263,6 +294,16 @@ impl Settings {
         subscribe_input(&gear_display_size_input, |this, _, cx| {
             this.apply_gear_display_size(cx);
         });
+        cx.subscribe_in(
+            &shift_lights_style_select,
+            window,
+            |this, _, event: &SelectEvent<Vec<ShiftLightsStyle>>, window, cx| {
+                if let SelectEvent::Confirm(Some(style)) = event {
+                    this.set_shift_lights_style(*style, window, cx);
+                }
+            },
+        )
+        .detach();
         Self {
             appearance_override: None,
             selected_section: initial_section,
@@ -273,6 +314,7 @@ impl Settings {
             last_remember_calibrated_cars: hud::remember_calibrated_cars(),
             last_shift_lights_position: hud::shift_lights_position(),
             last_shift_lights_direction: hud::shift_lights_direction(),
+            last_shift_lights_style: hud::shift_lights_style(),
             last_shift_lights_calibrated: hud::shift_lights_calibrated(),
             last_electric_car: hud::electric_car(),
             last_has_saved_calibration: hud::current_car_has_saved_calibration(),
@@ -293,6 +335,8 @@ impl Settings {
             shift_lights_gap_input,
             shift_lights_width_slider,
             shift_lights_blink_slider,
+            shift_lights_blink_ms_slider,
+            shift_lights_style_select,
             gear_display_x_slider,
             gear_display_y_slider,
             gear_display_size_input,
@@ -376,7 +420,7 @@ impl Settings {
         ));
     }
 
-    pub(super) fn sync_hud_settings(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn sync_hud_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let charts_visible = hud::charts_visible();
         let only_show_in_game = hud::only_show_in_game();
         let calibrate_hint_visible = hud::calibrate_hint_visible();
@@ -384,9 +428,11 @@ impl Settings {
         let remember_calibrated_cars = hud::remember_calibrated_cars();
         let position = hud::shift_lights_position();
         let direction = hud::shift_lights_direction();
+        let style = hud::shift_lights_style();
         let calibrated = hud::shift_lights_calibrated();
         let electric = hud::electric_car();
         let has_saved_calibration = hud::current_car_has_saved_calibration();
+        let style_changed = self.last_shift_lights_style != style;
         if self.last_charts_visible != charts_visible
             || self.last_only_show_in_game != only_show_in_game
             || self.last_calibrate_hint_visible != calibrate_hint_visible
@@ -394,6 +440,7 @@ impl Settings {
             || self.last_remember_calibrated_cars != remember_calibrated_cars
             || self.last_shift_lights_position != position
             || self.last_shift_lights_direction != direction
+            || style_changed
             || self.last_shift_lights_calibrated != calibrated
             || self.last_electric_car != electric
             || self.last_has_saved_calibration != has_saved_calibration
@@ -405,9 +452,14 @@ impl Settings {
             self.last_remember_calibrated_cars = remember_calibrated_cars;
             self.last_shift_lights_position = position;
             self.last_shift_lights_direction = direction;
+            self.last_shift_lights_style = style;
             self.last_shift_lights_calibrated = calibrated;
             self.last_electric_car = electric;
             self.last_has_saved_calibration = has_saved_calibration;
+            if style_changed {
+                self.sync_shift_lights_style_select(window, cx);
+                self.sync_shift_lights_size_controls(window, cx);
+            }
             cx.notify();
         }
     }

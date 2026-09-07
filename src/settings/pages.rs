@@ -5,12 +5,10 @@ use crate::config::{
     DEFAULT_CALIBRATE_MS, DEFAULT_FORWARD_HOST, DEFAULT_FORWARD_PORT,
     DEFAULT_GEAR_DISPLAY_DIM_OPACITY, DEFAULT_GEAR_DISPLAY_LIT_OPACITY,
     DEFAULT_GEAR_DISPLAY_SIZE_PX, DEFAULT_GEAR_DISPLAY_X_RATIO, DEFAULT_GEAR_DISPLAY_Y_RATIO,
-    DEFAULT_LISTEN_HOST, DEFAULT_LISTEN_PORT, DEFAULT_SHIFT_LIGHTS_BLINK_PERCENT,
-    DEFAULT_SHIFT_LIGHTS_DIM_OPACITY, DEFAULT_SHIFT_LIGHTS_GAP_PX,
-    DEFAULT_SHIFT_LIGHTS_LIT_OPACITY, DEFAULT_SHIFT_LIGHTS_OFFSET_PX,
-    DEFAULT_SHIFT_LIGHTS_THICKNESS_PX, DEFAULT_SHIFT_LIGHTS_WIDTH_PERCENT,
+    DEFAULT_LISTEN_HOST, DEFAULT_LISTEN_PORT, DEFAULT_SHIFT_LIGHTS_BLINK_MS,
+    DEFAULT_SHIFT_LIGHTS_BLINK_PERCENT, DEFAULT_SHIFT_LIGHTS_DIM_OPACITY,
 };
-use crate::hud::{self, ShiftLightsDirection, ShiftLightsPosition};
+use crate::hud::{self, ShiftLightsDirection, ShiftLightsPosition, ShiftLightsStyle};
 use crate::settings_section::SettingsSection;
 use crate::telemetry;
 
@@ -22,10 +20,70 @@ impl Settings {
         colors: &Colors,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let style = hud::shift_lights_style();
+        let style_default_offset = style.default_offset_px();
+        let style_default_lit_opacity = style.default_lit_opacity();
+        let style_default_thickness = style.default_thickness_px();
+        let style_default_gap = style.default_gap_px();
+        let style_default_width = style.default_width_percent();
+        let circles = style.is_symmetric_circles();
         let direction_description = if hud::shift_lights_position().is_vertical() {
             "纵向灯条：下→上为默认方向。"
         } else {
             "横向灯条：左→右为默认方向。"
+        };
+        let (position_group_title, position_group_desc) = if circles {
+            (
+                "样式与位置",
+                "选择转速灯样式和屏幕边缘位置。Porsche 911 GT3 Cup (992) 由两侧同时向中心点亮。",
+            )
+        } else {
+            (
+                "样式与位置",
+                "选择转速灯样式、贴边位置，以及转速升高时的点亮方向。",
+            )
+        };
+        let size_group_desc = if circles {
+            "调整圆灯组占屏幕的比例、灯珠直径、间距，以及离边缘的距离。"
+        } else {
+            "调整灯条占屏幕的比例、厚度、灯格间距，以及离边缘的距离。"
+        };
+        let width_desc = if circles {
+            "圆灯组占用的边长百分比，灯珠在此范围内居中排列；默认 75%。"
+        } else {
+            "横向灯条的宽度、纵向灯条的高度，占屏幕对应边的百分比；默认 75%。"
+        };
+        let (thickness_title, thickness_desc) = if circles {
+            (
+                "灯珠直径",
+                "每颗圆灯的直径，单位像素；默认 40 px。",
+            )
+        } else {
+            (
+                "灯条厚度",
+                "横向灯条的高度、纵向灯条的宽度，单位像素；默认 40 px。",
+            )
+        };
+        let (gap_title, gap_desc) = if circles {
+            (
+                "灯珠间隔",
+                "相邻圆灯之间的像素距离；可为 0，默认 8 px。",
+            )
+        } else {
+            (
+                "灯格间隔",
+                "相邻灯格之间的像素距离；可为 0，默认 8 px。",
+            )
+        };
+        let effect_group_desc = if circles {
+            "控制圆灯闪烁时机与速度，以及亮起与未亮起灯珠的透明度。"
+        } else {
+            "控制灯条闪烁时机与速度，以及亮起与未亮起灯格的透明度。"
+        };
+        let blink_desc = if circles {
+            "达到校准转速的该百分比后，全部圆灯变为蓝色闪烁；范围 80% 到 100%，步进 0.1%；默认 95%。"
+        } else {
+            "达到校准转速的该百分比后，整条灯条开始闪烁；范围 80% 到 100%，步进 0.1%；默认 95%。"
         };
         let offset_control = self.input_apply_control(
             Input::new(&self.shift_lights_offset_input)
@@ -79,11 +137,18 @@ impl Settings {
                     .child("此窗口拥有焦点时会暂时覆盖「仅游戏时显示」，强制显示 HUD，便于预览。失焦、离开此页或关闭设置后恢复。"),
             )
             .child(
-                Self::settings_group(
+                Self::settings_group(colors, position_group_title, position_group_desc)
+                .child(self.setting_row_with_reset(
                     colors,
-                    "位置与方向",
-                    "选择灯条贴在哪条屏幕边缘，以及转速升高时的点亮方向。",
-                )
+                    "样式",
+                    hud::shift_lights_style().description(),
+                    "shift-lights-style-reset",
+                    self.style_control(colors),
+                    hud::shift_lights_style() != ShiftLightsStyle::Bar,
+                    None,
+                    cx,
+                    |this, window, cx| this.reset_shift_lights_style(window, cx),
+                ))
                 .child(self.setting_row_with_reset(
                     colors,
                     "位置",
@@ -95,57 +160,55 @@ impl Settings {
                     cx,
                     |this, window, cx| this.reset_shift_lights_position(window, cx),
                 ))
-                .child(self.setting_row_with_reset(
-                    colors,
-                    "方向",
-                    direction_description,
-                    "shift-lights-direction-reset",
-                    self.direction_control(colors, cx),
-                    hud::shift_lights_direction()
-                        != ShiftLightsDirection::default_for(hud::shift_lights_position()),
-                    None,
-                    cx,
-                    |this, window, cx| this.reset_shift_lights_direction(window, cx),
-                )),
+                .when(!circles, |el| {
+                    el.child(self.setting_row_with_reset(
+                        colors,
+                        "方向",
+                        direction_description,
+                        "shift-lights-direction-reset",
+                        self.direction_control(colors, cx),
+                        hud::shift_lights_direction()
+                            != ShiftLightsDirection::default_for(hud::shift_lights_position()),
+                        None,
+                        cx,
+                        |this, window, cx| this.reset_shift_lights_direction(window, cx),
+                    ))
+                }),
             )
             .child(Self::separator(colors))
             .child(
-                Self::settings_group(
-                    colors,
-                    "尺寸与布局",
-                    "调整灯条占屏幕的比例、厚度、灯格间距，以及离边缘的距离。",
-                )
+                Self::settings_group(colors, "尺寸与布局", size_group_desc)
                 .child(self.opacity_slider_row(
                     "整体宽度",
-                    "横向灯条的宽度、纵向灯条的高度，占屏幕对应边的百分比；默认 75%。",
+                    width_desc,
                     "shift-lights-width-reset",
                     &self.shift_lights_width_slider,
                     colors,
                     None,
                     "%",
                     0,
-                    hud::shift_lights_width_percent() != DEFAULT_SHIFT_LIGHTS_WIDTH_PERCENT,
+                    hud::shift_lights_width_percent() != style_default_width,
                     cx,
                     |this, window, cx| this.reset_shift_lights_width(window, cx),
                 ))
                 .child(self.setting_row_with_reset(
                     colors,
-                    "灯条厚度",
-                    "横向灯条的高度、纵向灯条的宽度，单位像素；默认 40 px。",
+                    thickness_title,
+                    thickness_desc,
                     "shift-lights-thickness-reset",
                     thickness_control,
-                    hud::shift_lights_thickness_px() != DEFAULT_SHIFT_LIGHTS_THICKNESS_PX,
+                    hud::shift_lights_thickness_px() != style_default_thickness,
                     None,
                     cx,
                     |this, window, cx| this.reset_shift_lights_thickness(window, cx),
                 ))
                 .child(self.setting_row_with_reset(
                     colors,
-                    "灯格间隔",
-                    "相邻灯格之间的像素距离；可为 0，默认 8 px。",
+                    gap_title,
+                    gap_desc,
                     "shift-lights-gap-reset",
                     gap_control,
-                    hud::shift_lights_gap_px() != DEFAULT_SHIFT_LIGHTS_GAP_PX,
+                    hud::shift_lights_gap_px() != style_default_gap,
                     None,
                     cx,
                     |this, window, cx| this.reset_shift_lights_gap(window, cx),
@@ -156,7 +219,7 @@ impl Settings {
                     "0 表示紧贴边缘；正整数表示向屏幕内侧偏移的像素数。",
                     "shift-lights-offset-reset",
                     offset_control,
-                    hud::shift_lights_offset_px() != DEFAULT_SHIFT_LIGHTS_OFFSET_PX,
+                    hud::shift_lights_offset_px() != style_default_offset,
                     None,
                     cx,
                     |this, window, cx| this.reset_shift_lights_offset(window, cx),
@@ -164,14 +227,10 @@ impl Settings {
             )
             .child(Self::separator(colors))
             .child(
-                Self::settings_group(
-                    colors,
-                    "显示效果",
-                    "控制灯条闪烁时机，以及亮起与未亮起灯格的透明度。",
-                )
+                Self::settings_group(colors, "显示效果", effect_group_desc)
                 .child(self.opacity_slider_row(
                     "闪烁阈值",
-                    "达到校准转速的该百分比后，整条灯条开始闪烁；范围 80% 到 100%，步进 0.1%；默认 95%。",
+                    blink_desc,
                     "shift-lights-blink-reset",
                     &self.shift_lights_blink_slider,
                     colors,
@@ -183,6 +242,19 @@ impl Settings {
                     |this, window, cx| this.reset_shift_lights_blink(window, cx),
                 ))
                 .child(self.opacity_slider_row(
+                    "闪烁速度",
+                    "亮灭切换的半周期时长，数值越小闪烁越快；范围 20 到 200 ms，步进 5 ms；默认 80 ms。",
+                    "shift-lights-blink-ms-reset",
+                    &self.shift_lights_blink_ms_slider,
+                    colors,
+                    None,
+                    " ms",
+                    0,
+                    hud::shift_lights_blink_ms() != DEFAULT_SHIFT_LIGHTS_BLINK_MS,
+                    cx,
+                    |this, window, cx| this.reset_shift_lights_blink_ms(window, cx),
+                ))
+                .child(self.opacity_slider_row(
                     "亮起透明度",
                     "亮起的转速灯透明度，范围 0 到 1；默认 0.7。",
                     "shift-lights-lit-opacity-reset",
@@ -191,7 +263,7 @@ impl Settings {
                     None,
                     "",
                     2,
-                    hud::shift_lights_lit_opacity() != DEFAULT_SHIFT_LIGHTS_LIT_OPACITY,
+                    hud::shift_lights_lit_opacity() != style_default_lit_opacity,
                     cx,
                     |this, window, cx| this.reset_shift_lights_lit_opacity(window, cx),
                 ))

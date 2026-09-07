@@ -9,11 +9,13 @@ use crate::config::{
     CALIBRATE_MS_MAX, CALIBRATE_MS_MIN, CALIBRATE_PEAK_HOLD_FRAMES, DEFAULT_CALIBRATE_MS,
     DEFAULT_GEAR_DISPLAY_DIM_OPACITY, DEFAULT_GEAR_DISPLAY_LIT_OPACITY,
     DEFAULT_GEAR_DISPLAY_SIZE_PX, DEFAULT_GEAR_DISPLAY_X_RATIO, DEFAULT_GEAR_DISPLAY_Y_RATIO,
-    DEFAULT_SHIFT_LIGHTS_BLINK_PERCENT, DEFAULT_SHIFT_LIGHTS_DIM_OPACITY,
+    DEFAULT_SHIFT_LIGHTS_BLINK_MS, DEFAULT_SHIFT_LIGHTS_BLINK_PERCENT,
+    DEFAULT_SHIFT_LIGHTS_CIRCLES_LIT_OPACITY,
+    DEFAULT_SHIFT_LIGHTS_CIRCLES_OFFSET_PX, DEFAULT_SHIFT_LIGHTS_DIM_OPACITY,
     DEFAULT_SHIFT_LIGHTS_GAP_PX, DEFAULT_SHIFT_LIGHTS_LIT_OPACITY, DEFAULT_SHIFT_LIGHTS_OFFSET_PX,
     DEFAULT_SHIFT_LIGHTS_THICKNESS_PX, DEFAULT_SHIFT_LIGHTS_WIDTH_PERCENT, FUEL_CUT_WINDOW,
-    RPM_REVERSAL_FLOOR, RPM_REVERSAL_RANGE_FRAC, SAMPLE_HZ, SHIFT_LIGHTS_BLINK_PERCENT_MAX,
-    SHIFT_LIGHTS_BLINK_PERCENT_MIN,
+    RPM_REVERSAL_FLOOR, RPM_REVERSAL_RANGE_FRAC, SAMPLE_HZ, SHIFT_LIGHTS_BLINK_MS_MAX,
+    SHIFT_LIGHTS_BLINK_MS_MIN, SHIFT_LIGHTS_BLINK_PERCENT_MAX, SHIFT_LIGHTS_BLINK_PERCENT_MIN,
 };
 use crate::ring_buffer::RingBuffer;
 use crate::telemetry::{CarId, TelemetrySample, spawn_udp_listener};
@@ -23,17 +25,30 @@ static SHOW_CALIBRATE_HINT: AtomicBool = AtomicBool::new(false);
 static SHOW_ONLY_IN_GAME: AtomicBool = AtomicBool::new(true);
 static SHIFT_LIGHTS_POSITION: AtomicU8 = AtomicU8::new(ShiftLightsPosition::Top as u8);
 static SHIFT_LIGHTS_DIRECTION: AtomicU8 = AtomicU8::new(0);
-static SHIFT_LIGHTS_LIT_OPACITY: AtomicU32 =
+static SHIFT_LIGHTS_STYLE: AtomicU8 = AtomicU8::new(0);
+static SHIFT_LIGHTS_BAR_LIT_OPACITY: AtomicU32 =
     AtomicU32::new(DEFAULT_SHIFT_LIGHTS_LIT_OPACITY.to_bits());
+static SHIFT_LIGHTS_CIRCLES_LIT_OPACITY: AtomicU32 =
+    AtomicU32::new(DEFAULT_SHIFT_LIGHTS_CIRCLES_LIT_OPACITY.to_bits());
 static SHIFT_LIGHTS_DIM_OPACITY: AtomicU32 =
     AtomicU32::new(DEFAULT_SHIFT_LIGHTS_DIM_OPACITY.to_bits());
-static SHIFT_LIGHTS_OFFSET_PX: AtomicUsize = AtomicUsize::new(DEFAULT_SHIFT_LIGHTS_OFFSET_PX);
-static SHIFT_LIGHTS_THICKNESS_PX: AtomicUsize = AtomicUsize::new(DEFAULT_SHIFT_LIGHTS_THICKNESS_PX);
-static SHIFT_LIGHTS_GAP_PX: AtomicUsize = AtomicUsize::new(DEFAULT_SHIFT_LIGHTS_GAP_PX);
-static SHIFT_LIGHTS_WIDTH_PERCENT: AtomicUsize =
+static SHIFT_LIGHTS_BAR_OFFSET_PX: AtomicUsize =
+    AtomicUsize::new(DEFAULT_SHIFT_LIGHTS_OFFSET_PX);
+static SHIFT_LIGHTS_CIRCLES_OFFSET_PX: AtomicUsize =
+    AtomicUsize::new(DEFAULT_SHIFT_LIGHTS_CIRCLES_OFFSET_PX);
+static SHIFT_LIGHTS_BAR_THICKNESS_PX: AtomicUsize =
+    AtomicUsize::new(DEFAULT_SHIFT_LIGHTS_THICKNESS_PX);
+static SHIFT_LIGHTS_BAR_GAP_PX: AtomicUsize = AtomicUsize::new(DEFAULT_SHIFT_LIGHTS_GAP_PX);
+static SHIFT_LIGHTS_BAR_WIDTH_PERCENT: AtomicUsize =
+    AtomicUsize::new(DEFAULT_SHIFT_LIGHTS_WIDTH_PERCENT);
+static SHIFT_LIGHTS_CIRCLES_THICKNESS_PX: AtomicUsize =
+    AtomicUsize::new(DEFAULT_SHIFT_LIGHTS_THICKNESS_PX);
+static SHIFT_LIGHTS_CIRCLES_GAP_PX: AtomicUsize = AtomicUsize::new(DEFAULT_SHIFT_LIGHTS_GAP_PX);
+static SHIFT_LIGHTS_CIRCLES_WIDTH_PERCENT: AtomicUsize =
     AtomicUsize::new(DEFAULT_SHIFT_LIGHTS_WIDTH_PERCENT);
 static SHIFT_LIGHTS_BLINK_PERCENT: AtomicU32 =
     AtomicU32::new(DEFAULT_SHIFT_LIGHTS_BLINK_PERCENT.to_bits());
+static SHIFT_LIGHTS_BLINK_MS: AtomicUsize = AtomicUsize::new(DEFAULT_SHIFT_LIGHTS_BLINK_MS);
 static CALIBRATE_PROGRESS_DIRECTION: AtomicU8 = AtomicU8::new(2);
 static CALIBRATE_MS: AtomicUsize = AtomicUsize::new(DEFAULT_CALIBRATE_MS);
 static STRICT_CALIBRATE_CONDITIONS: AtomicBool = AtomicBool::new(false);
@@ -256,6 +271,76 @@ impl ShiftLightsDirection {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum ShiftLightsStyle {
+    #[default]
+    Bar,
+    SymmetricCircles,
+}
+
+impl ShiftLightsStyle {
+    fn to_u8(self) -> u8 {
+        match self {
+            Self::Bar => 0,
+            Self::SymmetricCircles => 1,
+        }
+    }
+
+    fn from_u8(value: u8) -> Self {
+        match value {
+            1 => Self::SymmetricCircles,
+            _ => Self::Bar,
+        }
+    }
+
+    pub(crate) fn is_symmetric_circles(self) -> bool {
+        matches!(self, Self::SymmetricCircles)
+    }
+
+    pub(crate) fn label(self) -> &'static str {
+        match self {
+            Self::Bar => "基础灯条",
+            Self::SymmetricCircles => "Porsche 911 GT3 Cup (992)",
+        }
+    }
+
+    pub(crate) fn description(self) -> &'static str {
+        match self {
+            Self::Bar => "仿照拉力赛车样式的转速指示灯。",
+            Self::SymmetricCircles => {
+                "仿照保时捷 911 GT3 Cup (992) 对称环形转速指示灯，由两侧同时向中心点亮。"
+            }
+        }
+    }
+
+    pub(crate) fn default_offset_px(self) -> usize {
+        match self {
+            Self::Bar => DEFAULT_SHIFT_LIGHTS_OFFSET_PX,
+            Self::SymmetricCircles => DEFAULT_SHIFT_LIGHTS_CIRCLES_OFFSET_PX,
+        }
+    }
+
+    pub(crate) fn default_thickness_px(self) -> usize {
+        DEFAULT_SHIFT_LIGHTS_THICKNESS_PX
+    }
+
+    pub(crate) fn default_gap_px(self) -> usize {
+        DEFAULT_SHIFT_LIGHTS_GAP_PX
+    }
+
+    pub(crate) fn default_width_percent(self) -> usize {
+        DEFAULT_SHIFT_LIGHTS_WIDTH_PERCENT
+    }
+
+    pub(crate) fn default_lit_opacity(self) -> f32 {
+        match self {
+            Self::Bar => DEFAULT_SHIFT_LIGHTS_LIT_OPACITY,
+            Self::SymmetricCircles => DEFAULT_SHIFT_LIGHTS_CIRCLES_LIT_OPACITY,
+        }
+    }
+}
+
 pub(crate) fn shift_lights_position() -> ShiftLightsPosition {
     ShiftLightsPosition::from_u8(SHIFT_LIGHTS_POSITION.load(Ordering::Relaxed))
 }
@@ -279,8 +364,20 @@ pub(crate) fn set_shift_lights_direction(direction: ShiftLightsDirection) {
     }
 }
 
+pub(crate) fn shift_lights_style() -> ShiftLightsStyle {
+    ShiftLightsStyle::from_u8(SHIFT_LIGHTS_STYLE.load(Ordering::Relaxed))
+}
+
+pub(crate) fn set_shift_lights_style(style: ShiftLightsStyle) {
+    persist_if(SHIFT_LIGHTS_STYLE.swap(style.to_u8(), Ordering::Relaxed) != style.to_u8());
+}
+
 pub(crate) fn shift_lights_lit_opacity() -> f32 {
-    f32::from_bits(SHIFT_LIGHTS_LIT_OPACITY.load(Ordering::Relaxed))
+    shift_lights_lit_opacity_for(shift_lights_style())
+}
+
+pub(crate) fn shift_lights_lit_opacity_for(style: ShiftLightsStyle) -> f32 {
+    f32::from_bits(shift_lights_lit_opacity_atomic(style).load(Ordering::Relaxed))
 }
 
 pub(crate) fn shift_lights_dim_opacity() -> f32 {
@@ -288,7 +385,14 @@ pub(crate) fn shift_lights_dim_opacity() -> f32 {
 }
 
 pub(crate) fn set_shift_lights_lit_opacity(opacity: f32) -> Result<f32, String> {
-    set_shift_lights_opacity(&SHIFT_LIGHTS_LIT_OPACITY, opacity)
+    set_shift_lights_lit_opacity_for(shift_lights_style(), opacity)
+}
+
+pub(crate) fn set_shift_lights_lit_opacity_for(
+    style: ShiftLightsStyle,
+    opacity: f32,
+) -> Result<f32, String> {
+    set_shift_lights_opacity(shift_lights_lit_opacity_atomic(style), opacity)
 }
 
 pub(crate) fn set_shift_lights_dim_opacity(opacity: f32) -> Result<f32, String> {
@@ -296,42 +400,115 @@ pub(crate) fn set_shift_lights_dim_opacity(opacity: f32) -> Result<f32, String> 
 }
 
 pub(crate) fn shift_lights_offset_px() -> usize {
-    SHIFT_LIGHTS_OFFSET_PX.load(Ordering::Relaxed)
+    shift_lights_offset_px_for(shift_lights_style())
+}
+
+pub(crate) fn shift_lights_offset_px_for(style: ShiftLightsStyle) -> usize {
+    shift_lights_offset_atomic(style).load(Ordering::Relaxed)
 }
 
 pub(crate) fn set_shift_lights_offset_px(offset: usize) {
-    persist_if(SHIFT_LIGHTS_OFFSET_PX.swap(offset, Ordering::Relaxed) != offset);
+    set_shift_lights_offset_px_for(shift_lights_style(), offset);
+}
+
+pub(crate) fn set_shift_lights_offset_px_for(style: ShiftLightsStyle, offset: usize) {
+    persist_if(shift_lights_offset_atomic(style).swap(offset, Ordering::Relaxed) != offset);
+}
+
+fn shift_lights_lit_opacity_atomic(style: ShiftLightsStyle) -> &'static AtomicU32 {
+    match style {
+        ShiftLightsStyle::Bar => &SHIFT_LIGHTS_BAR_LIT_OPACITY,
+        ShiftLightsStyle::SymmetricCircles => &SHIFT_LIGHTS_CIRCLES_LIT_OPACITY,
+    }
+}
+
+fn shift_lights_offset_atomic(style: ShiftLightsStyle) -> &'static AtomicUsize {
+    match style {
+        ShiftLightsStyle::Bar => &SHIFT_LIGHTS_BAR_OFFSET_PX,
+        ShiftLightsStyle::SymmetricCircles => &SHIFT_LIGHTS_CIRCLES_OFFSET_PX,
+    }
+}
+
+fn shift_lights_thickness_atomic(style: ShiftLightsStyle) -> &'static AtomicUsize {
+    match style {
+        ShiftLightsStyle::Bar => &SHIFT_LIGHTS_BAR_THICKNESS_PX,
+        ShiftLightsStyle::SymmetricCircles => &SHIFT_LIGHTS_CIRCLES_THICKNESS_PX,
+    }
+}
+
+fn shift_lights_gap_atomic(style: ShiftLightsStyle) -> &'static AtomicUsize {
+    match style {
+        ShiftLightsStyle::Bar => &SHIFT_LIGHTS_BAR_GAP_PX,
+        ShiftLightsStyle::SymmetricCircles => &SHIFT_LIGHTS_CIRCLES_GAP_PX,
+    }
+}
+
+fn shift_lights_width_atomic(style: ShiftLightsStyle) -> &'static AtomicUsize {
+    match style {
+        ShiftLightsStyle::Bar => &SHIFT_LIGHTS_BAR_WIDTH_PERCENT,
+        ShiftLightsStyle::SymmetricCircles => &SHIFT_LIGHTS_CIRCLES_WIDTH_PERCENT,
+    }
 }
 
 pub(crate) fn shift_lights_thickness_px() -> usize {
-    SHIFT_LIGHTS_THICKNESS_PX.load(Ordering::Relaxed)
+    shift_lights_thickness_px_for(shift_lights_style())
+}
+
+pub(crate) fn shift_lights_thickness_px_for(style: ShiftLightsStyle) -> usize {
+    shift_lights_thickness_atomic(style).load(Ordering::Relaxed)
 }
 
 pub(crate) fn set_shift_lights_thickness_px(thickness: usize) -> Result<usize, String> {
+    set_shift_lights_thickness_px_for(shift_lights_style(), thickness)
+}
+
+pub(crate) fn set_shift_lights_thickness_px_for(
+    style: ShiftLightsStyle,
+    thickness: usize,
+) -> Result<usize, String> {
     if thickness == 0 {
         return Err("灯条厚度必须是大于 0 的整数。".into());
     }
-    persist_if(SHIFT_LIGHTS_THICKNESS_PX.swap(thickness, Ordering::Relaxed) != thickness);
+    persist_if(shift_lights_thickness_atomic(style).swap(thickness, Ordering::Relaxed) != thickness);
     Ok(thickness)
 }
 
 pub(crate) fn shift_lights_gap_px() -> usize {
-    SHIFT_LIGHTS_GAP_PX.load(Ordering::Relaxed)
+    shift_lights_gap_px_for(shift_lights_style())
+}
+
+pub(crate) fn shift_lights_gap_px_for(style: ShiftLightsStyle) -> usize {
+    shift_lights_gap_atomic(style).load(Ordering::Relaxed)
 }
 
 pub(crate) fn set_shift_lights_gap_px(gap: usize) {
-    persist_if(SHIFT_LIGHTS_GAP_PX.swap(gap, Ordering::Relaxed) != gap);
+    set_shift_lights_gap_px_for(shift_lights_style(), gap);
+}
+
+pub(crate) fn set_shift_lights_gap_px_for(style: ShiftLightsStyle, gap: usize) {
+    persist_if(shift_lights_gap_atomic(style).swap(gap, Ordering::Relaxed) != gap);
 }
 
 pub(crate) fn shift_lights_width_percent() -> usize {
-    SHIFT_LIGHTS_WIDTH_PERCENT.load(Ordering::Relaxed)
+    shift_lights_width_percent_for(shift_lights_style())
+}
+
+pub(crate) fn shift_lights_width_percent_for(style: ShiftLightsStyle) -> usize {
+    shift_lights_width_atomic(style).load(Ordering::Relaxed)
 }
 
 pub(crate) fn set_shift_lights_width_percent(width: usize) -> Result<usize, String> {
+    set_shift_lights_width_percent_for(shift_lights_style(), width)
+}
+
+pub(crate) fn set_shift_lights_width_percent_for(
+    style: ShiftLightsStyle,
+    width: usize,
+) -> Result<usize, String> {
     if !(1..=100).contains(&width) {
         return Err("整体宽度必须是 1 到 100 之间的整数百分比。".into());
     }
-    persist_if(SHIFT_LIGHTS_WIDTH_PERCENT.swap(width, Ordering::Relaxed) != width);
+    persist_if(shift_lights_width_atomic(style).swap(width, Ordering::Relaxed) != width);
     Ok(width)
 }
 
@@ -351,6 +528,20 @@ pub(crate) fn set_shift_lights_blink_percent(percent: f32) -> Result<f32, String
         SHIFT_LIGHTS_BLINK_PERCENT.swap(percent.to_bits(), Ordering::Relaxed) != percent.to_bits(),
     );
     Ok(percent)
+}
+
+pub(crate) fn shift_lights_blink_ms() -> usize {
+    SHIFT_LIGHTS_BLINK_MS.load(Ordering::Relaxed)
+}
+
+pub(crate) fn set_shift_lights_blink_ms(blink_ms: usize) -> Result<usize, String> {
+    if !(SHIFT_LIGHTS_BLINK_MS_MIN..=SHIFT_LIGHTS_BLINK_MS_MAX).contains(&blink_ms) {
+        return Err(format!(
+            "闪烁速度必须是 {SHIFT_LIGHTS_BLINK_MS_MIN} 到 {SHIFT_LIGHTS_BLINK_MS_MAX} 之间的整数毫秒。"
+        ));
+    }
+    persist_if(SHIFT_LIGHTS_BLINK_MS.swap(blink_ms, Ordering::Relaxed) != blink_ms);
+    Ok(blink_ms)
 }
 
 fn set_shift_lights_opacity(target: &AtomicU32, opacity: f32) -> Result<f32, String> {
@@ -556,6 +747,10 @@ impl RpmHud {
         shift_lights_direction()
     }
 
+    pub(crate) fn shift_lights_style(&self) -> ShiftLightsStyle {
+        shift_lights_style()
+    }
+
     pub(crate) fn shift_lights_lit_opacity(&self) -> f32 {
         shift_lights_lit_opacity()
     }
@@ -742,6 +937,7 @@ fn start_sample_pump(cx: &mut Context<RpmHud>) {
         let mut last_remember_calibrated_cars = remember_calibrated_cars();
         let mut last_shift_lights_position = shift_lights_position();
         let mut last_shift_lights_direction = shift_lights_direction();
+        let mut last_shift_lights_style = shift_lights_style();
         let mut last_shift_lights_lit_opacity = shift_lights_lit_opacity();
         let mut last_shift_lights_dim_opacity = shift_lights_dim_opacity();
         let mut last_shift_lights_offset_px = shift_lights_offset_px();
@@ -749,6 +945,7 @@ fn start_sample_pump(cx: &mut Context<RpmHud>) {
         let mut last_shift_lights_gap_px = shift_lights_gap_px();
         let mut last_shift_lights_width_percent = shift_lights_width_percent();
         let mut last_shift_lights_blink_percent = shift_lights_blink_percent();
+        let mut last_shift_lights_blink_ms = shift_lights_blink_ms();
         let mut last_calibrate_direction = calibrate_progress_direction();
         let mut last_listen_generation = crate::telemetry::listen_generation();
         let mut last_calibrate_ms = calibrate_ms();
@@ -769,6 +966,7 @@ fn start_sample_pump(cx: &mut Context<RpmHud>) {
             let remember_cars = remember_calibrated_cars();
             let lights_position = shift_lights_position();
             let lights_direction = shift_lights_direction();
+            let lights_style = shift_lights_style();
             let lights_lit_opacity = shift_lights_lit_opacity();
             let lights_dim_opacity = shift_lights_dim_opacity();
             let lights_offset_px = shift_lights_offset_px();
@@ -776,6 +974,7 @@ fn start_sample_pump(cx: &mut Context<RpmHud>) {
             let lights_gap_px = shift_lights_gap_px();
             let lights_width_percent = shift_lights_width_percent();
             let lights_blink_percent = shift_lights_blink_percent();
+            let lights_blink_ms = shift_lights_blink_ms();
             let calibrate_direction = calibrate_progress_direction();
             let listen_generation = crate::telemetry::listen_generation();
             let current_calibrate_ms = calibrate_ms();
@@ -793,6 +992,7 @@ fn start_sample_pump(cx: &mut Context<RpmHud>) {
                 || remember_cars != last_remember_calibrated_cars
                 || lights_position != last_shift_lights_position
                 || lights_direction != last_shift_lights_direction
+                || lights_style != last_shift_lights_style
                 || lights_lit_opacity != last_shift_lights_lit_opacity
                 || lights_dim_opacity != last_shift_lights_dim_opacity
                 || lights_offset_px != last_shift_lights_offset_px
@@ -800,6 +1000,7 @@ fn start_sample_pump(cx: &mut Context<RpmHud>) {
                 || lights_gap_px != last_shift_lights_gap_px
                 || lights_width_percent != last_shift_lights_width_percent
                 || lights_blink_percent != last_shift_lights_blink_percent
+                || lights_blink_ms != last_shift_lights_blink_ms
                 || calibrate_direction != last_calibrate_direction
                 || listen_generation != last_listen_generation
                 || current_calibrate_ms != last_calibrate_ms
@@ -815,6 +1016,7 @@ fn start_sample_pump(cx: &mut Context<RpmHud>) {
                 last_remember_calibrated_cars = remember_cars;
                 last_shift_lights_position = lights_position;
                 last_shift_lights_direction = lights_direction;
+                last_shift_lights_style = lights_style;
                 last_shift_lights_lit_opacity = lights_lit_opacity;
                 last_shift_lights_dim_opacity = lights_dim_opacity;
                 last_shift_lights_offset_px = lights_offset_px;
@@ -822,6 +1024,7 @@ fn start_sample_pump(cx: &mut Context<RpmHud>) {
                 last_shift_lights_gap_px = lights_gap_px;
                 last_shift_lights_width_percent = lights_width_percent;
                 last_shift_lights_blink_percent = lights_blink_percent;
+                last_shift_lights_blink_ms = lights_blink_ms;
                 last_calibrate_direction = calibrate_direction;
                 last_listen_generation = listen_generation;
                 last_calibrate_ms = current_calibrate_ms;

@@ -4,12 +4,10 @@ use crate::config::{
     DEFAULT_CALIBRATE_MS, DEFAULT_FORWARD_HOST, DEFAULT_FORWARD_PORT,
     DEFAULT_GEAR_DISPLAY_DIM_OPACITY, DEFAULT_GEAR_DISPLAY_LIT_OPACITY,
     DEFAULT_GEAR_DISPLAY_SIZE_PX, DEFAULT_GEAR_DISPLAY_X_RATIO, DEFAULT_GEAR_DISPLAY_Y_RATIO,
-    DEFAULT_LISTEN_HOST, DEFAULT_LISTEN_PORT, DEFAULT_SHIFT_LIGHTS_BLINK_PERCENT,
-    DEFAULT_SHIFT_LIGHTS_DIM_OPACITY, DEFAULT_SHIFT_LIGHTS_GAP_PX,
-    DEFAULT_SHIFT_LIGHTS_LIT_OPACITY, DEFAULT_SHIFT_LIGHTS_OFFSET_PX,
-    DEFAULT_SHIFT_LIGHTS_THICKNESS_PX,
+    DEFAULT_LISTEN_HOST, DEFAULT_LISTEN_PORT, DEFAULT_SHIFT_LIGHTS_BLINK_MS,
+    DEFAULT_SHIFT_LIGHTS_BLINK_PERCENT, DEFAULT_SHIFT_LIGHTS_DIM_OPACITY,
 };
-use crate::hud::{self, ShiftLightsDirection, ShiftLightsPosition};
+use crate::hud::{self, ShiftLightsDirection, ShiftLightsPosition, ShiftLightsStyle};
 use crate::telemetry;
 use crate::user_config;
 
@@ -137,6 +135,61 @@ impl Settings {
             ShiftLightsDirection::default_for(hud::shift_lights_position()),
             cx,
         );
+    }
+
+    pub(super) fn set_shift_lights_style(
+        &mut self,
+        style: ShiftLightsStyle,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        hud::set_shift_lights_style(style);
+        self.last_shift_lights_style = style;
+        self.sync_shift_lights_style_select(window, cx);
+        self.sync_shift_lights_size_controls(window, cx);
+        cx.notify();
+    }
+
+    pub(super) fn reset_shift_lights_style(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.set_shift_lights_style(ShiftLightsStyle::Bar, window, cx);
+    }
+
+    pub(super) fn sync_shift_lights_style_select(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let style = hud::shift_lights_style();
+        self.shift_lights_style_select.update(cx, |select, cx| {
+            select.set_selected_value(&style, window, cx);
+        });
+    }
+
+    pub(super) fn sync_shift_lights_size_controls(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.shift_lights_thickness_input.update(cx, |input, cx| {
+            input.set_value(hud::shift_lights_thickness_px().to_string(), window, cx);
+        });
+        self.shift_lights_gap_input.update(cx, |input, cx| {
+            input.set_value(hud::shift_lights_gap_px().to_string(), window, cx);
+        });
+        self.shift_lights_width_slider.update(cx, |slider, cx| {
+            slider.set_value(hud::shift_lights_width_percent() as f32, window, cx);
+        });
+        self.shift_lights_offset_input.update(cx, |input, cx| {
+            input.set_value(hud::shift_lights_offset_px().to_string(), window, cx);
+        });
+        self.shift_lights_lit_opacity_slider
+            .update(cx, |slider, cx| {
+                slider.set_value(hud::shift_lights_lit_opacity(), window, cx);
+            });
     }
 
     pub(super) fn apply_listen_addr(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -333,11 +386,12 @@ impl Settings {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let default = hud::shift_lights_style().default_lit_opacity();
         self.shift_lights_lit_opacity_slider
             .update(cx, |slider, cx| {
-                slider.set_value(DEFAULT_SHIFT_LIGHTS_LIT_OPACITY, window, cx);
+                slider.set_value(default, window, cx);
             });
-        let _ = hud::set_shift_lights_lit_opacity(DEFAULT_SHIFT_LIGHTS_LIT_OPACITY);
+        let _ = hud::set_shift_lights_lit_opacity(default);
         cx.notify();
     }
 
@@ -368,10 +422,11 @@ impl Settings {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let default = hud::shift_lights_style().default_offset_px();
         self.shift_lights_offset_input.update(cx, |input, cx| {
-            input.set_value(DEFAULT_SHIFT_LIGHTS_OFFSET_PX.to_string(), window, cx);
+            input.set_value(default.to_string(), window, cx);
         });
-        hud::set_shift_lights_offset_px(DEFAULT_SHIFT_LIGHTS_OFFSET_PX);
+        hud::set_shift_lights_offset_px(default);
         cx.notify();
     }
 
@@ -392,10 +447,11 @@ impl Settings {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let default = hud::shift_lights_style().default_thickness_px();
         self.shift_lights_thickness_input.update(cx, |input, cx| {
-            input.set_value(DEFAULT_SHIFT_LIGHTS_THICKNESS_PX.to_string(), window, cx);
+            input.set_value(default.to_string(), window, cx);
         });
-        let _ = hud::set_shift_lights_thickness_px(DEFAULT_SHIFT_LIGHTS_THICKNESS_PX);
+        let _ = hud::set_shift_lights_thickness_px(default);
         cx.notify();
     }
 
@@ -409,21 +465,20 @@ impl Settings {
     }
 
     pub(super) fn reset_shift_lights_gap(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let default = hud::shift_lights_style().default_gap_px();
         self.shift_lights_gap_input.update(cx, |input, cx| {
-            input.set_value(DEFAULT_SHIFT_LIGHTS_GAP_PX.to_string(), window, cx);
+            input.set_value(default.to_string(), window, cx);
         });
-        hud::set_shift_lights_gap_px(DEFAULT_SHIFT_LIGHTS_GAP_PX);
+        hud::set_shift_lights_gap_px(default);
         cx.notify();
     }
 
     pub(super) fn reset_shift_lights_width(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let default = hud::shift_lights_style().default_width_percent();
         self.shift_lights_width_slider.update(cx, |slider, cx| {
-            slider.set_value(
-                crate::config::DEFAULT_SHIFT_LIGHTS_WIDTH_PERCENT as f32,
-                window,
-                cx,
-            );
+            slider.set_value(default as f32, window, cx);
         });
+        let _ = hud::set_shift_lights_width_percent(default);
         cx.notify();
     }
 
@@ -431,6 +486,18 @@ impl Settings {
         self.shift_lights_blink_slider.update(cx, |slider, cx| {
             slider.set_value(DEFAULT_SHIFT_LIGHTS_BLINK_PERCENT, window, cx);
         });
+        cx.notify();
+    }
+
+    pub(super) fn reset_shift_lights_blink_ms(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.shift_lights_blink_ms_slider.update(cx, |slider, cx| {
+            slider.set_value(DEFAULT_SHIFT_LIGHTS_BLINK_MS as f32, window, cx);
+        });
+        let _ = hud::set_shift_lights_blink_ms(DEFAULT_SHIFT_LIGHTS_BLINK_MS);
         cx.notify();
     }
 
@@ -478,12 +545,8 @@ impl Settings {
         self.shift_lights_offset_input.update(cx, |input, cx| {
             input.set_value(hud::shift_lights_offset_px().to_string(), window, cx);
         });
-        self.shift_lights_thickness_input.update(cx, |input, cx| {
-            input.set_value(hud::shift_lights_thickness_px().to_string(), window, cx);
-        });
-        self.shift_lights_gap_input.update(cx, |input, cx| {
-            input.set_value(hud::shift_lights_gap_px().to_string(), window, cx);
-        });
+        self.sync_shift_lights_style_select(window, cx);
+        self.sync_shift_lights_size_controls(window, cx);
         self.gear_display_size_input.update(cx, |input, cx| {
             input.set_value(hud::gear_display_size_px().to_string(), window, cx);
         });
@@ -495,11 +558,11 @@ impl Settings {
             .update(cx, |slider, cx| {
                 slider.set_value(hud::shift_lights_dim_opacity(), window, cx);
             });
-        self.shift_lights_width_slider.update(cx, |slider, cx| {
-            slider.set_value(hud::shift_lights_width_percent() as f32, window, cx);
-        });
         self.shift_lights_blink_slider.update(cx, |slider, cx| {
             slider.set_value(hud::shift_lights_blink_percent(), window, cx);
+        });
+        self.shift_lights_blink_ms_slider.update(cx, |slider, cx| {
+            slider.set_value(hud::shift_lights_blink_ms() as f32, window, cx);
         });
         let (gear_x, gear_y) = hud::gear_display_position_ratio();
         self.gear_display_x_slider.update(cx, |slider, cx| {
@@ -523,5 +586,6 @@ impl Settings {
         self.last_remember_calibrated_cars = hud::remember_calibrated_cars();
         self.last_shift_lights_position = hud::shift_lights_position();
         self.last_shift_lights_direction = hud::shift_lights_direction();
+        self.last_shift_lights_style = hud::shift_lights_style();
     }
 }

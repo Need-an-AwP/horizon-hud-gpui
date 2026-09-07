@@ -1,16 +1,29 @@
-use gpui::{Context, Entity, IntoElement, Window, div, prelude::*, px, relative};
+use gpui::{Context, Entity, IntoElement, SharedString, Window, div, prelude::*, px, relative};
 use gpui_component::{
     Icon, IconName, Sizable, Size, StyledExt,
     button::{Button, ButtonVariants},
     input::InputState,
+    select::{Select, SelectItem},
     slider::{Slider, SliderState, SliderValue},
 };
 
-use crate::hud::{self, ShiftLightsDirection, ShiftLightsPosition};
+use crate::hud::{self, ShiftLightsDirection, ShiftLightsPosition, ShiftLightsStyle};
 use crate::platform;
 use crate::settings_section::SettingsSection;
 
 use super::{Settings, colors::Colors};
+
+impl SelectItem for ShiftLightsStyle {
+    type Value = Self;
+
+    fn title(&self) -> SharedString {
+        SharedString::from(self.label())
+    }
+
+    fn value(&self) -> &Self::Value {
+        self
+    }
+}
 
 impl Settings {
     pub(super) fn section_navigation(
@@ -126,6 +139,7 @@ impl Settings {
     ) -> gpui::Div {
         div()
             .flex()
+            .flex_row()
             .items_center()
             .justify_between()
             .gap_4()
@@ -138,6 +152,7 @@ impl Settings {
                 div()
                     .flex()
                     .flex_col()
+                    .flex_1()
                     .gap_1()
                     .min_w_0()
                     .child(div().text_sm().child(title))
@@ -148,7 +163,7 @@ impl Settings {
                             .child(description),
                     ),
             )
-            .child(control)
+            .child(div().flex_none().child(control))
     }
 
     pub(super) fn reset_icon_button(
@@ -230,6 +245,7 @@ impl Settings {
     ) -> gpui::Div {
         div()
             .flex()
+            .flex_row()
             .items_center()
             .justify_between()
             .gap_4()
@@ -242,6 +258,7 @@ impl Settings {
                 div()
                     .flex()
                     .flex_col()
+                    .flex_1()
                     .gap_1()
                     .min_w_0()
                     .child(self.title_with_reset(title, reset_id, show_reset, cx, on_reset))
@@ -255,7 +272,7 @@ impl Settings {
                         el.child(Self::warning_hint(colors, text))
                     }),
             )
-            .child(control)
+            .child(div().flex_none().child(control))
     }
 
     fn slider_value_width(suffix: &str, decimal_places: usize) -> gpui::Pixels {
@@ -370,6 +387,20 @@ impl Settings {
             .on_click(cx.listener(move |this, _, _, cx| {
                 on_toggle(this, !checked, cx);
             }))
+    }
+
+    pub(super) fn style_control(&self, colors: &Colors) -> impl IntoElement + use<> {
+        div()
+            .flex_none()
+            .w(px(228.))
+            .child(
+                Select::new(&self.shift_lights_style_select)
+                    .w_full()
+                    .with_size(Size::Small)
+                    .icon(Icon::empty().path("icons/chevron-down.svg"))
+                    .bg(colors.container)
+                    .border_color(colors.border),
+            )
     }
 
     pub(super) fn position_control(
