@@ -27,7 +27,7 @@ impl SettingsSection {
             Self::Overview => "管理 Horizon HUD 的常用选项与运行状态。",
             Self::Hud => "配置 HUD 的显示条件与图表可见性。",
             Self::ShiftLights => "按样式、位置、尺寸和显示效果配置转速指示灯。",
-            Self::GearDisplay => "调整七段数码管挡位显示的位置、大小和透明度。",
+            Self::GearDisplay => "选择挡位样式，并调整位置、大小和透明度。",
             Self::Telemetry => "配置 UDP 遥测监听地址、端口，以及数据包转发。",
             Self::Calibration => "配置转速指示灯校准时长、条件与提示样式。",
             Self::About => "查看应用信息、版本与支持资源。",

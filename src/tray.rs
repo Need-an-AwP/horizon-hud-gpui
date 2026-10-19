@@ -23,21 +23,22 @@ fn run() {
     use tray_icon::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem};
     use tray_icon::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 
-    use crate::{hud, platform, settings};
+    use crate::app::settings_window;
+    use crate::{platform, session};
 
     let icon = load_icon(include_bytes!("../assets/icon.png"));
     let charts_item = CheckMenuItem::with_id(
         CHARTS_ITEM_ID,
         "图表显示",
         true,
-        hud::charts_visible(),
+        session::general().charts_visible,
         None,
     );
     let game_only_item = CheckMenuItem::with_id(
         GAME_ONLY_ITEM_ID,
         "仅游戏时显示",
         true,
-        hud::only_show_in_game(),
+        session::general().only_show_in_game,
         None,
     );
     let settings_item = MenuItem::with_id(SETTINGS_ITEM_ID, "设置", true, None);
@@ -70,33 +71,35 @@ fn run() {
                 ..
             } = event
             {
-                settings::request_open_shift_lights();
+                settings_window::request_open_shift_lights();
             }
         }
 
         while let Ok(event) = MenuEvent::receiver().try_recv() {
             if event.id() == CHARTS_ITEM_ID {
-                hud::set_charts_visible(charts_item.is_checked());
+                let visible = charts_item.is_checked();
+                session::update_general(|general| general.charts_visible = visible);
             } else if event.id() == GAME_ONLY_ITEM_ID {
-                hud::set_only_show_in_game(game_only_item.is_checked());
+                let visible = game_only_item.is_checked();
+                session::update_general(|general| general.only_show_in_game = visible);
             } else if event.id() == SETTINGS_ITEM_ID {
-                settings::request_open();
+                settings_window::request_open();
             } else if event.id() == EXIT_ITEM_ID {
                 platform::quit_app();
                 return;
             }
         }
 
-        let charts_visible = hud::charts_visible();
+        let charts_visible = session::general().charts_visible;
         if charts_item.is_checked() != charts_visible {
             charts_item.set_checked(charts_visible);
         }
-        let game_only = hud::only_show_in_game();
+        let game_only = session::general().only_show_in_game;
         if game_only_item.is_checked() != game_only {
             game_only_item.set_checked(game_only);
         }
 
-        let visible = hud::force_hud_visible() || !game_only || platform::foreground_is_game();
+        let visible = session::force_hud_visible() || !game_only || platform::foreground_is_game();
         platform::set_hud_visible(visible);
 
         thread::sleep(Duration::from_millis(100));

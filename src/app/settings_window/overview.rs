@@ -5,10 +5,10 @@ use gpui_component::{
     tooltip::Tooltip,
 };
 
-use crate::hud;
-use crate::settings_section::SettingsSection;
-use crate::telemetry;
-use crate::user_config;
+use crate::core::calibration;
+use crate::core::telemetry;
+use crate::session;
+use crate::app::settings_window::section::SettingsSection;
 
 use super::{Settings, colors::Colors};
 
@@ -24,8 +24,8 @@ impl Settings {
                     colors.success,
                 )
             };
-        let calibrated = hud::shift_lights_calibrated();
-        let electric = hud::electric_car();
+        let calibrated = calibration::shift_lights_calibrated();
+        let electric = calibration::electric_car();
         let (calibration_state, calibration_detail, calibration_color) = if electric {
             (
                 "无需校准",
@@ -41,7 +41,7 @@ impl Settings {
         } else {
             (
                 "等待校准",
-                if hud::strict_calibrate_conditions() {
+                if session::general().strict_calibrate_conditions {
                     "同时按下手刹和油门，等待转速上升完成校准".to_string()
                 } else {
                     "按住油门拉到断油转速完成校准".to_string()
@@ -50,7 +50,7 @@ impl Settings {
             )
         };
 
-        let config_path = user_config::active_path();
+        let config_path = session::active_path();
 
         div().flex().flex_col().size_full().p_6().child(
             div()
@@ -99,7 +99,7 @@ impl Settings {
                                     calibration_color,
                                     "icons/gauge.svg",
                                     SettingsSection::Calibration,
-                                    hud::current_car_has_saved_calibration(),
+                                    session::current_car_has_saved_calibration(),
                                     colors,
                                     cx,
                                 )),
@@ -308,7 +308,7 @@ impl Settings {
                                 Tooltip::new("点击打开配置文件").build(window, cx)
                             })
                             .on_click(cx.listener(|_, _, _, _| {
-                                user_config::open_active();
+                                session::open_active();
                             }))
                     })
                     .child(

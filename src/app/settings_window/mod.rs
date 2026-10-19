@@ -1,10 +1,9 @@
 use std::sync::atomic::{AtomicU8, Ordering};
 
 use gpui::{App, Entity, colors::DefaultAppearance};
-use gpui_component::{input::InputState, select::SelectState, slider::SliderState};
+use gpui_component::input::InputState;
 
-use crate::hud::{ShiftLightsDirection, ShiftLightsPosition, ShiftLightsStyle};
-use crate::settings_section::SettingsSection;
+use section::SettingsSection;
 
 const OPEN_IDLE: u8 = 0;
 const OPEN_DEFAULT: u8 = 1;
@@ -14,12 +13,13 @@ static OPEN_REQUEST: AtomicU8 = AtomicU8::new(OPEN_IDLE);
 
 mod about;
 mod actions;
-mod colors;
+pub(crate) mod colors;
 mod controls;
 mod hud_display;
 mod layout;
 mod overview;
 mod pages;
+mod section;
 mod settings_window;
 mod state;
 
@@ -31,9 +31,6 @@ pub(crate) struct Settings {
     last_calibrate_hint_visible: bool,
     last_strict_calibrate_conditions: bool,
     last_remember_calibrated_cars: bool,
-    last_shift_lights_position: ShiftLightsPosition,
-    last_shift_lights_direction: ShiftLightsDirection,
-    last_shift_lights_style: ShiftLightsStyle,
     last_shift_lights_calibrated: bool,
     last_electric_car: bool,
     last_has_saved_calibration: bool,
@@ -47,20 +44,8 @@ pub(crate) struct Settings {
     forward_host_input: Entity<InputState>,
     forward_port_input: Entity<InputState>,
     calibrate_ms_input: Entity<InputState>,
-    shift_lights_lit_opacity_slider: Entity<SliderState>,
-    shift_lights_dim_opacity_slider: Entity<SliderState>,
-    shift_lights_offset_input: Entity<InputState>,
-    shift_lights_thickness_input: Entity<InputState>,
-    shift_lights_gap_input: Entity<InputState>,
-    shift_lights_width_slider: Entity<SliderState>,
-    shift_lights_blink_slider: Entity<SliderState>,
-    shift_lights_blink_ms_slider: Entity<SliderState>,
-    shift_lights_style_select: Entity<SelectState<Vec<ShiftLightsStyle>>>,
-    gear_display_x_slider: Entity<SliderState>,
-    gear_display_y_slider: Entity<SliderState>,
-    gear_display_size_input: Entity<InputState>,
-    gear_display_lit_opacity_slider: Entity<SliderState>,
-    gear_display_dim_opacity_slider: Entity<SliderState>,
+    pub(crate) shift_lights: crate::components::shift_lights::ShiftLightsControls,
+    pub(crate) gear_display: crate::components::gear_display::GearDisplayControls,
 }
 
 pub(crate) fn request_open() {

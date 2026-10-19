@@ -1,29 +1,16 @@
-use gpui::{Context, Entity, IntoElement, SharedString, Window, div, prelude::*, px, relative};
+use gpui::{Context, Entity, IntoElement, Window, div, prelude::*, px, relative};
 use gpui_component::{
-    Icon, IconName, Sizable, Size, StyledExt,
+    Icon, IconName, Sizable, Size,
     button::{Button, ButtonVariants},
     input::InputState,
-    select::{Select, SelectItem},
-    slider::{Slider, SliderState, SliderValue},
 };
 
-use crate::hud::{self, ShiftLightsDirection, ShiftLightsPosition, ShiftLightsStyle};
 use crate::platform;
-use crate::settings_section::SettingsSection;
+
+use super::section::SettingsSection;
 
 use super::{Settings, colors::Colors};
 
-impl SelectItem for ShiftLightsStyle {
-    type Value = Self;
-
-    fn title(&self) -> SharedString {
-        SharedString::from(self.label())
-    }
-
-    fn value(&self) -> &Self::Value {
-        self
-    }
-}
 
 impl Settings {
     pub(super) fn section_navigation(
@@ -82,31 +69,6 @@ impl Settings {
             .on_click(|_, _, _| {
                 platform::quit_app();
             })
-    }
-
-    pub(super) fn separator(colors: &Colors) -> gpui::Div {
-        div().w_full().h(px(1.)).bg(colors.border)
-    }
-
-    pub(super) fn settings_group(
-        colors: &Colors,
-        title: &'static str,
-        description: &'static str,
-    ) -> gpui::Div {
-        div().flex().flex_col().gap_2().child(
-            div()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .px_1()
-                .child(div().text_sm().font_medium().child(title))
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(colors.disabled)
-                        .child(description),
-                ),
-        )
     }
 
     pub(super) fn placeholder_row(
@@ -275,81 +237,6 @@ impl Settings {
             .child(div().flex_none().child(control))
     }
 
-    fn slider_value_width(suffix: &str, decimal_places: usize) -> gpui::Pixels {
-        match (suffix, decimal_places) {
-            ("%", 0) => px(44.),
-            ("%", _) => px(58.),
-            (_, 0) => px(36.),
-            _ => px(48.),
-        }
-    }
-
-    pub(super) fn opacity_slider_row(
-        &self,
-        title: &'static str,
-        description: &'static str,
-        reset_id: &'static str,
-        slider: &Entity<SliderState>,
-        colors: &Colors,
-        warning: Option<&'static str>,
-        suffix: &'static str,
-        decimal_places: usize,
-        show_reset: bool,
-        cx: &mut Context<Self>,
-        on_reset: impl Fn(&mut Self, &mut Window, &mut Context<Self>) + 'static,
-    ) -> gpui::Div {
-        let value = match slider.read(cx).value() {
-            SliderValue::Single(value) => value,
-            SliderValue::Range(start, _) => start,
-        };
-        let value_label = format!("{value:.prec$}{suffix}", prec = decimal_places);
-        div()
-            .flex()
-            .items_center()
-            .justify_between()
-            .gap_4()
-            .p_4()
-            .border_1()
-            .border_color(colors.border)
-            .rounded_lg()
-            .bg(colors.background)
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_1()
-                    .min_w_0()
-                    .child(self.title_with_reset(title, reset_id, show_reset, cx, on_reset))
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(colors.disabled)
-                            .child(description),
-                    )
-                    .when_some(warning, |el, text| {
-                        el.child(Self::warning_hint(colors, text))
-                    }),
-            )
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_3()
-                    .w(px(232.))
-                    .child(Slider::new(slider).horizontal())
-                    .child(
-                        div()
-                            .flex_none()
-                            .w(Self::slider_value_width(suffix, decimal_places))
-                            .whitespace_nowrap()
-                            .text_sm()
-                            .text_right()
-                            .text_color(colors.disabled)
-                            .child(value_label),
-                    ),
-            )
-    }
-
     pub(super) fn switch_control<T: Fn(&mut Self, bool, &mut Context<Self>) + 'static>(
         &self,
         id: &'static str,
@@ -389,191 +276,6 @@ impl Settings {
             }))
     }
 
-    pub(super) fn style_control(&self, colors: &Colors) -> impl IntoElement + use<> {
-        div()
-            .flex_none()
-            .w(px(228.))
-            .child(
-                Select::new(&self.shift_lights_style_select)
-                    .w_full()
-                    .with_size(Size::Small)
-                    .icon(Icon::empty().path("icons/chevron-down.svg"))
-                    .bg(colors.container)
-                    .border_color(colors.border),
-            )
-    }
-
-    pub(super) fn position_control(
-        &self,
-        colors: &Colors,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement + use<> {
-        let selected = hud::shift_lights_position();
-        div()
-            .flex()
-            .flex_row()
-            .flex_none()
-            .p_1()
-            .gap_1()
-            .rounded_md()
-            .bg(colors.container)
-            .border_1()
-            .border_color(colors.border)
-            .child(self.position_option(
-                "shift-lights-bottom",
-                "底部",
-                selected == ShiftLightsPosition::Bottom,
-                ShiftLightsPosition::Bottom,
-                colors,
-                cx,
-            ))
-            .child(self.position_option(
-                "shift-lights-right",
-                "右侧",
-                selected == ShiftLightsPosition::Right,
-                ShiftLightsPosition::Right,
-                colors,
-                cx,
-            ))
-            .child(self.position_option(
-                "shift-lights-top",
-                "顶部",
-                selected == ShiftLightsPosition::Top,
-                ShiftLightsPosition::Top,
-                colors,
-                cx,
-            ))
-            .child(self.position_option(
-                "shift-lights-left",
-                "左侧",
-                selected == ShiftLightsPosition::Left,
-                ShiftLightsPosition::Left,
-                colors,
-                cx,
-            ))
-    }
-
-    pub(super) fn position_option(
-        &self,
-        id: &'static str,
-        label: &'static str,
-        selected: bool,
-        position: ShiftLightsPosition,
-        colors: &Colors,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        div()
-            .id(id)
-            .px_3()
-            .py_1()
-            .rounded_sm()
-            .text_xs()
-            .cursor_pointer()
-            .when(selected, |el| {
-                el.bg(colors.selected).text_color(colors.selected_text)
-            })
-            .when(!selected, |el| el.text_color(colors.text))
-            .hover(|style| {
-                if selected {
-                    style.opacity(0.9)
-                } else {
-                    style.bg(colors.background)
-                }
-            })
-            .on_click(cx.listener(move |this, _, _, cx| {
-                this.set_shift_lights_position(position, cx);
-            }))
-            .child(label)
-    }
-
-    pub(super) fn direction_control(
-        &self,
-        colors: &Colors,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement + use<> {
-        let position = hud::shift_lights_position();
-        let selected = hud::shift_lights_direction();
-        let (first_id, first_label, first_direction, second_id, second_label, second_direction) =
-            if position.is_vertical() {
-                (
-                    "shift-lights-bottom-to-top",
-                    "下 → 上",
-                    ShiftLightsDirection::BottomToTop,
-                    "shift-lights-top-to-bottom",
-                    "上 → 下",
-                    ShiftLightsDirection::TopToBottom,
-                )
-            } else {
-                (
-                    "shift-lights-left-to-right",
-                    "左 → 右",
-                    ShiftLightsDirection::LeftToRight,
-                    "shift-lights-right-to-left",
-                    "右 → 左",
-                    ShiftLightsDirection::RightToLeft,
-                )
-            };
-
-        div()
-            .flex()
-            .flex_row()
-            .flex_none()
-            .p_1()
-            .gap_1()
-            .rounded_md()
-            .bg(colors.container)
-            .border_1()
-            .border_color(colors.border)
-            .child(self.direction_option(
-                first_id,
-                first_label,
-                selected == first_direction,
-                first_direction,
-                colors,
-                cx,
-            ))
-            .child(self.direction_option(
-                second_id,
-                second_label,
-                selected == second_direction,
-                second_direction,
-                colors,
-                cx,
-            ))
-    }
-
-    pub(super) fn direction_option(
-        &self,
-        id: &'static str,
-        label: &'static str,
-        selected: bool,
-        direction: ShiftLightsDirection,
-        colors: &Colors,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        div()
-            .id(id)
-            .px_3()
-            .py_1()
-            .rounded_sm()
-            .text_xs()
-            .cursor_pointer()
-            .when(selected, |el| {
-                el.bg(colors.selected).text_color(colors.selected_text)
-            })
-            .when(!selected, |el| el.text_color(colors.text))
-            .hover(|style| {
-                if selected {
-                    style.opacity(0.9)
-                } else {
-                    style.bg(colors.background)
-                }
-            })
-            .on_click(cx.listener(move |this, _, _, cx| {
-                this.set_shift_lights_direction(direction, cx);
-            }))
-            .child(label)
-    }
 
     pub(super) fn action_button(
         &self,

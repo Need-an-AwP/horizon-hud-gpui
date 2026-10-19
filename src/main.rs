@@ -1,14 +1,10 @@
+mod app;
 mod assets;
-mod config;
-mod hud;
+mod components;
+mod core;
 mod platform;
-mod ring_buffer;
-mod settings;
-mod settings_section;
-mod telemetry;
+mod session;
 mod tray;
-mod ui;
-mod user_config;
 
 use std::time::Duration;
 
@@ -17,14 +13,14 @@ use gpui::{
     WindowOptions,
 };
 
-use hud::RpmHud;
+use app::hud_window::HudWindow;
 use platform::{configure_hud_window, register_hud_window};
 
 fn main() {
     if !platform::try_become_singleton() {
         return;
     }
-    user_config::load_and_apply();
+    session::load_and_apply();
     tray::spawn();
     Application::new()
         .with_assets(assets::Assets)
@@ -43,10 +39,10 @@ fn main() {
                     Timer::after(Duration::from_millis(50)).await;
                     let _ = cx.update(|cx| {
                         if platform::take_activate_request() {
-                            settings::request_open();
+                            app::settings_window::request_open();
                         }
-                        settings::poll_open(cx);
-                        settings::poll_sync(cx);
+                        app::settings_window::poll_open(cx);
+                        app::settings_window::poll_sync(cx);
                         platform::poll_quit(cx);
                     });
                 }
@@ -68,7 +64,7 @@ fn main() {
                 |window, cx| {
                     register_hud_window(window);
                     configure_hud_window(window);
-                    cx.new(RpmHud::new)
+                    cx.new(HudWindow::new)
                 },
             )
             .unwrap();

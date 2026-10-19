@@ -1,6 +1,6 @@
 use gpui::{Context, IntoElement, div, prelude::*};
 
-use crate::hud;
+use crate::session;
 
 use super::{Settings, colors::Colors};
 
@@ -10,8 +10,9 @@ impl Settings {
         colors: &Colors,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let only_show_in_game = hud::only_show_in_game();
-        let charts_visible = hud::charts_visible();
+        let general = session::general();
+        let only_show_in_game = general.only_show_in_game;
+        let charts_visible = general.charts_visible;
 
         div()
             .flex()

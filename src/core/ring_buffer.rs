@@ -1,4 +1,4 @@
-use crate::config::HISTORY_LEN;
+use crate::core::general_config::HISTORY_LEN;
 
 pub(crate) struct RingBuffer {
     samples: [f32; HISTORY_LEN],

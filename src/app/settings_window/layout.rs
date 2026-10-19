@@ -1,7 +1,7 @@
 use gpui::{Context, IntoElement, Render, Window, colors::DefaultAppearance, div, prelude::*, px};
 use gpui_component::{Sizable, Size, button::Button};
 
-use crate::settings_section::SettingsSection;
+use super::section::SettingsSection;
 
 use super::Settings;
 

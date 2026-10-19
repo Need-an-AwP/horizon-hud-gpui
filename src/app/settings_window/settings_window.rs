@@ -6,7 +6,7 @@ use gpui::{
 };
 use gpui_component::Root;
 
-use crate::settings_section::SettingsSection;
+use super::section::SettingsSection;
 
 use super::Settings;
 
@@ -78,7 +78,7 @@ pub(super) fn sync(cx: &mut App) {
         return;
     };
     if handle.update(cx, |_, _, _| ()).is_err() {
-        crate::hud::set_force_hud_visible(false);
+        crate::session::set_force_hud_visible(false);
         return;
     }
     let Some(settings) = cx.try_global::<OpenSettings>().map(|open| open.0.clone()) else {

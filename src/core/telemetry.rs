@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
-use crate::config::{
+use crate::core::general_config::{
     ACCEL_OFFSET, CAR_CLASS_OFFSET, CAR_ORDINAL_OFFSET, CAR_PERFORMANCE_INDEX_OFFSET,
     CURRENT_ENGINE_RPM_OFFSET, CURRENT_GEAR_OFFSET, DEFAULT_FORWARD_HOST, DEFAULT_FORWARD_PORT,
     DEFAULT_LISTEN_HOST, DEFAULT_LISTEN_PORT, ENGINE_MAX_RPM_OFFSET, HANDBRAKE_OFFSET,
@@ -14,25 +14,25 @@ use crate::config::{
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct CarId {
-    pub ordinal: i32,
-    pub class: i32,
-    pub pi: i32,
+    pub(crate) ordinal: i32,
+    pub(crate) class: i32,
+    pub(crate) pi: i32,
 }
 
 #[derive(Clone, Copy)]
 pub(crate) struct TelemetrySample {
-    pub rpm: f32,
-    pub max_rpm: f32,
-    pub power: f32,
-    pub torque: f32,
-    pub accel: u8,
-    pub handbrake: u8,
-    pub current_gear: u8,
-    pub is_race_on: i32,
-    pub car_ordinal: i32,
-    pub car_class: i32,
-    pub car_pi: i32,
-    pub num_cylinders: i32,
+    pub(crate) rpm: f32,
+    pub(crate) max_rpm: f32,
+    pub(crate) power: f32,
+    pub(crate) torque: f32,
+    pub(crate) accel: u8,
+    pub(crate) handbrake: u8,
+    pub(crate) current_gear: u8,
+    pub(crate) is_race_on: i32,
+    pub(crate) car_ordinal: i32,
+    pub(crate) car_class: i32,
+    pub(crate) car_pi: i32,
+    pub(crate) num_cylinders: i32,
 }
 
 impl TelemetrySample {
@@ -131,10 +131,6 @@ pub(crate) fn forward_enabled() -> bool {
     FORWARD_ENABLED.load(Ordering::Relaxed)
 }
 
-pub(crate) fn set_forward_enabled(enabled: bool) {
-    persist_if(FORWARD_ENABLED.swap(enabled, Ordering::Relaxed) != enabled);
-}
-
 pub(crate) fn forward_addr() -> SocketAddr {
     *FORWARD_ADDR.lock().unwrap()
 }
@@ -176,7 +172,6 @@ pub(crate) fn apply_listen_addr(addr: SocketAddr) -> Result<(), String> {
     let handle = thread::spawn(move || recv_loop(socket, queue));
     *THREAD.lock().unwrap() = Some(handle);
     bump_generation();
-    crate::user_config::persist();
     Ok(())
 }
 
@@ -195,16 +190,13 @@ pub(crate) fn apply_forward_addr(addr: SocketAddr) -> Result<(), String> {
     if addr == listen_addr() {
         return Err("转发地址不能与监听地址相同。".into());
     }
-    let changed = addr != forward_addr();
     set_forward_addr(addr);
-    persist_if(changed);
     Ok(())
 }
 
 pub(crate) fn apply_default_forward() {
     FORWARD_ENABLED.store(false, Ordering::Relaxed);
     set_forward_addr(default_forward_addr());
-    crate::user_config::persist();
 }
 
 pub(crate) fn configure_forward(enabled: bool, host: &str, port: u16) {
@@ -273,12 +265,6 @@ fn set_addr(addr: SocketAddr) {
 
 fn set_forward_addr(addr: SocketAddr) {
     *FORWARD_ADDR.lock().unwrap() = addr;
-}
-
-fn persist_if(changed: bool) {
-    if changed {
-        crate::user_config::persist();
-    }
 }
 
 fn maybe_forward(socket: &UdpSocket, buf: &[u8]) {
