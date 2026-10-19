@@ -1,5 +1,6 @@
 pub mod bar;
 pub mod porsche_cup;
+pub mod rally_1;
 
 use gpui::{div, prelude::*, px, Context, Entity, IntoElement, SharedString, Window};
 use gpui_component::{
@@ -20,6 +21,8 @@ pub enum ShiftLightsStyle {
     Bar,
     #[serde(alias = "symmetric_circles")]
     PorscheCup,
+    #[serde(rename = "rally_1")]
+    Rally1,
 }
 
 impl ShiftLightsStyle {
@@ -27,6 +30,7 @@ impl ShiftLightsStyle {
         match self {
             Self::Bar => "基础灯条",
             Self::PorscheCup => "Porsche 911 GT3 Cup (992)",
+            Self::Rally1 => "Rally 1",
         }
     }
 
@@ -36,6 +40,17 @@ impl ShiftLightsStyle {
             Self::PorscheCup => {
                 "仿照保时捷 911 GT3 Cup (992) 对称环形转速指示灯，由两侧同时向中心点亮。"
             }
+            Self::Rally1 => {
+                "顶部五段转速灯，无间隙铺满宽度，由两侧向中心按绿、黄、红依次点亮。"
+            }
+        }
+    }
+
+    fn index(self) -> usize {
+        match self {
+            Self::Bar => 0,
+            Self::PorscheCup => 1,
+            Self::Rally1 => 2,
         }
     }
 }
@@ -58,6 +73,7 @@ pub struct ShiftLightsSettings {
     pub style: ShiftLightsStyle,
     pub bar: bar::BarConfig,
     pub porsche_cup: porsche_cup::PorscheCupConfig,
+    pub rally_1: rally_1::Rally1Config,
 }
 
 impl Default for ShiftLightsSettings {
@@ -66,6 +82,7 @@ impl Default for ShiftLightsSettings {
             style: ShiftLightsStyle::Bar,
             bar: bar::BarConfig::default(),
             porsche_cup: porsche_cup::PorscheCupConfig::default(),
+            rally_1: rally_1::Rally1Config::default(),
         }
     }
 }
@@ -74,6 +91,7 @@ pub struct ShiftLightsControls {
     pub style_select: Entity<SelectState<Vec<ShiftLightsStyle>>>,
     pub bar: bar::SettingsControls,
     pub porsche_cup: porsche_cup::SettingsControls,
+    pub rally_1: rally_1::SettingsControls,
 }
 
 impl ShiftLightsControls {
@@ -84,11 +102,12 @@ impl ShiftLightsControls {
     ) -> Self {
         let style_select = cx.new(|cx| {
             SelectState::new(
-                vec![ShiftLightsStyle::Bar, ShiftLightsStyle::PorscheCup],
-                Some(IndexPath::new(match cfg.style {
-                    ShiftLightsStyle::Bar => 0,
-                    ShiftLightsStyle::PorscheCup => 1,
-                })),
+                vec![
+                    ShiftLightsStyle::Bar,
+                    ShiftLightsStyle::PorscheCup,
+                    ShiftLightsStyle::Rally1,
+                ],
+                Some(IndexPath::new(cfg.style.index())),
                 window,
                 cx,
             )
@@ -108,6 +127,7 @@ impl ShiftLightsControls {
             style_select,
             bar: bar::SettingsControls::new(&cfg.bar, window, cx),
             porsche_cup: porsche_cup::SettingsControls::new(&cfg.porsche_cup, window, cx),
+            rally_1: rally_1::SettingsControls::new(&cfg.rally_1, window, cx),
         }
     }
 
@@ -117,6 +137,7 @@ impl ShiftLightsControls {
         });
         self.bar.sync(&cfg.bar, window, cx);
         self.porsche_cup.sync(&cfg.porsche_cup, window, cx);
+        self.rally_1.sync(&cfg.rally_1, window, cx);
     }
 }
 
@@ -124,6 +145,7 @@ pub fn render_hud(props: &HudTelemetryProps, settings: &ShiftLightsSettings) -> 
     match settings.style {
         ShiftLightsStyle::Bar => bar::render_hud(props, &settings.bar),
         ShiftLightsStyle::PorscheCup => porsche_cup::render_hud(props, &settings.porsche_cup),
+        ShiftLightsStyle::Rally1 => rally_1::render_hud(props, &settings.rally_1),
     }
 }
 
@@ -159,6 +181,7 @@ pub fn render_settings(
     let body = match style {
         ShiftLightsStyle::Bar => bar::render_settings(view, colors, cx),
         ShiftLightsStyle::PorscheCup => porsche_cup::render_settings(view, colors, cx),
+        ShiftLightsStyle::Rally1 => rally_1::render_settings(view, colors, cx),
     };
     div()
         .flex()

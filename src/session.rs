@@ -474,6 +474,7 @@ fn migrate_legacy(table: &toml::Table) -> AppConfig {
             },
             bar,
             porsche_cup: porsche,
+            ..ShiftLightsSettings::default()
         },
         gear_display,
         calibrated_cars: table
