@@ -1,5 +1,5 @@
-use gpui::{div, prelude::*, px, relative, Context, Entity, IntoElement, Window};
-use gpui_component::{
+use gpui_kit::{div, prelude::*, px, relative, Context, Entity, IntoElement, Window};
+use gpui_kit::component::{
     button::{Button, ButtonVariants},
     input::InputState,
     Icon, IconName, Sizable, Size, StyledExt,
@@ -9,7 +9,7 @@ use gpui_component::{
 use crate::app::settings_window::colors::Colors;
 use crate::app::settings_window::Settings;
 
-pub fn separator(colors: &Colors) -> gpui::Div {
+pub fn separator(colors: &Colors) -> gpui_kit::Div {
     div().w_full().h(px(1.)).bg(colors.border)
 }
 
@@ -17,7 +17,7 @@ pub fn settings_group(
     colors: &Colors,
     title: &'static str,
     description: &'static str,
-) -> gpui::Div {
+) -> gpui_kit::Div {
     div().flex().flex_col().gap_2().child(
         div()
             .flex()
@@ -40,7 +40,7 @@ pub fn setting_row(
     title: &'static str,
     description: &'static str,
     control: impl IntoElement,
-) -> gpui::Div {
+) -> gpui_kit::Div {
     div()
         .flex()
         .flex_row()
@@ -70,7 +70,7 @@ pub fn setting_row(
         .child(div().flex_none().child(control))
 }
 
-pub fn warning_hint(colors: &Colors, text: &'static str) -> gpui::Div {
+pub fn warning_hint(colors: &Colors, text: &'static str) -> gpui_kit::Div {
     div()
         .flex()
         .flex_row()
@@ -120,7 +120,7 @@ fn title_with_reset(
     show_reset: bool,
     cx: &mut Context<Settings>,
     on_reset: impl Fn(&mut Settings, &mut Window, &mut Context<Settings>) + 'static,
-) -> gpui::Div {
+) -> gpui_kit::Div {
     div()
         .flex()
         .items_center()
@@ -143,7 +143,7 @@ pub fn setting_row_with_reset(
     warning: Option<&'static str>,
     cx: &mut Context<Settings>,
     on_reset: impl Fn(&mut Settings, &mut Window, &mut Context<Settings>) + 'static,
-) -> gpui::Div {
+) -> gpui_kit::Div {
     div()
         .flex()
         .flex_row()
@@ -174,7 +174,7 @@ pub fn setting_row_with_reset(
         .child(div().flex_none().child(control))
 }
 
-fn slider_value_width(suffix: &str, decimal_places: usize) -> gpui::Pixels {
+fn slider_value_width(suffix: &str, decimal_places: usize) -> gpui_kit::Pixels {
     match (suffix, decimal_places) {
         ("%", 0) => px(44.),
         ("%", _) => px(58.),
@@ -195,7 +195,7 @@ pub fn slider_row(
     show_reset: bool,
     cx: &mut Context<Settings>,
     on_reset: impl Fn(&mut Settings, &mut Window, &mut Context<Settings>) + 'static,
-) -> gpui::Div {
+) -> gpui_kit::Div {
     let value = match slider.read(cx).value() {
         SliderValue::Single(value) => value,
         SliderValue::Range(start, _) => start,
@@ -327,7 +327,7 @@ pub fn input_apply_control(
     colors: &Colors,
     cx: &mut Context<Settings>,
     on_apply: impl Fn(&mut Settings, &mut Window, &mut Context<Settings>) + 'static,
-) -> gpui::Div {
+) -> gpui_kit::Div {
     div()
         .flex()
         .items_center()

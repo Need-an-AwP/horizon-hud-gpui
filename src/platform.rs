@@ -1,6 +1,6 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use gpui::{App, Window};
+use gpui_kit::{App, Window};
 
 #[cfg(target_os = "windows")]
 use std::sync::OnceLock;

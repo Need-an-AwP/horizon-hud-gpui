@@ -1,4 +1,4 @@
-use gpui::{Context, IntoElement, div, prelude::*};
+use gpui_kit::{Context, IntoElement, div, prelude::*};
 
 use crate::session;
 

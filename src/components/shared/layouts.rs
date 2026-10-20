@@ -1,4 +1,4 @@
-use gpui::{div, prelude::*, px, relative, IntoElement};
+use gpui_kit::{div, prelude::*, px, relative, IntoElement};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -24,7 +24,7 @@ pub fn edge_strip_container(
     thickness_px: usize,
     offset_px: usize,
     child: impl IntoElement,
-) -> gpui::Div {
+) -> gpui_kit::Div {
     let vertical = position.is_vertical();
     let offset = px(offset_px as f32);
     let span = relative(span_percent as f32 / 100.0);
@@ -58,7 +58,7 @@ pub fn floating_xy_container(
     x_ratio: f32,
     y_ratio: f32,
     child: impl IntoElement,
-) -> gpui::Div {
+) -> gpui_kit::Div {
     div()
         .absolute()
         .left(relative(x_ratio))

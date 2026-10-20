@@ -1,4 +1,4 @@
-use gpui::{Context, Window};
+use gpui_kit::{Context, Window};
 
 use crate::core::calibration;
 use crate::core::general_config::{

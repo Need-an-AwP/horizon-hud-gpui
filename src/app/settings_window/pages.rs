@@ -1,5 +1,5 @@
-use gpui::{Context, IntoElement, div, prelude::*, px};
-use gpui_component::{Icon, Sizable, Size, input::Input, scroll::ScrollableElement};
+use gpui_kit::{Context, IntoElement, div, prelude::*, px};
+use gpui_kit::component::{Icon, Sizable, Size, input::Input, scroll::ScrollableElement};
 
 use crate::core::general_config::{
     DEFAULT_CALIBRATE_MS, DEFAULT_FORWARD_HOST, DEFAULT_FORWARD_PORT, DEFAULT_LISTEN_HOST,
@@ -54,13 +54,13 @@ impl Settings {
             .child(
                 Input::new(&self.host_input)
                     .w(px(148.))
-                    .with_size(Size::Small),
+                    .with_size(Size::Medium),
             )
             .child(div().text_sm().text_color(colors.disabled).child(":"))
             .child(
                 Input::new(&self.port_input)
                     .w(px(72.))
-                    .with_size(Size::Small),
+                    .with_size(Size::Medium),
             );
 
         let forward_enabled = telemetry::forward_enabled();
@@ -97,13 +97,13 @@ impl Settings {
             .child(
                 Input::new(&self.forward_host_input)
                     .w(px(148.))
-                    .with_size(Size::Small),
+                    .with_size(Size::Medium),
             )
             .child(div().text_sm().text_color(colors.disabled).child(":"))
             .child(
                 Input::new(&self.forward_port_input)
                     .w(px(72.))
-                    .with_size(Size::Small),
+                    .with_size(Size::Medium),
             );
 
         div()
@@ -144,7 +144,7 @@ impl Settings {
         let calibrate_ms_control = self.input_apply_control(
             Input::new(&self.calibrate_ms_input)
                 .w(px(96.))
-                .with_size(Size::Small),
+                .with_size(Size::Medium),
             Some("ms"),
             "calibrate-ms-apply",
             self.input_differs(&self.calibrate_ms_input, general.calibrate_ms, cx),

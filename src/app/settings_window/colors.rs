@@ -1,6 +1,6 @@
 use std::ops::Deref;
 
-use gpui::{Rgba, Window, colors::Colors as BaseColors, rgb};
+use gpui_kit::{Rgba, Window, colors::Colors as BaseColors, rgb};
 
 pub struct Colors {
     base: BaseColors,

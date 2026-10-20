@@ -1,8 +1,8 @@
-use gpui::{
+use gpui_kit::{
     AnyElement, Bounds, Context, Entity, PathBuilder, Pixels, Window, canvas, div, point,
     prelude::*, px, relative,
 };
-use gpui_component::{
+use gpui_kit::component::{
     Sizable, Size,
     input::{Input, InputEvent, InputState},
     slider::{SliderEvent, SliderState, SliderValue},
@@ -204,7 +204,7 @@ pub fn render_settings(view: &Settings, colors: &Colors, cx: &mut Context<Settin
     let size_control = input_apply_control(
         Input::new(&view.gear_display.seven_segment.size)
             .w(px(96.))
-            .with_size(Size::Small),
+            .with_size(Size::Medium),
         Some("px"),
         "gear-seg-size-apply",
         input_differs(&view.gear_display.seven_segment.size, cfg.size_px, cx),
@@ -360,7 +360,7 @@ fn seven_segment_digit(
     size: f32,
     lit_opacity: f32,
     dim_opacity: f32,
-) -> gpui::Div {
+) -> gpui_kit::Div {
     let width = size * 0.62;
     let height = size;
     let mask = seven_segment_mask(character);

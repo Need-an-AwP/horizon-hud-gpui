@@ -1,10 +1,10 @@
 use std::sync::Mutex;
 
-use gpui::{
+use gpui_kit::{
     App, AppContext, Bounds, Entity, Global, TitlebarOptions, Window, WindowBounds, WindowHandle,
     WindowKind, WindowOptions, px, size,
 };
-use gpui_component::Root;
+use gpui_kit::component::Root;
 
 use super::section::SettingsSection;
 
@@ -47,7 +47,7 @@ pub(super) fn open(cx: &mut App, section: Option<SettingsSection>) {
             focus: true,
             is_movable: true,
             is_resizable: true,
-            window_background: gpui::WindowBackgroundAppearance::Opaque,
+            window_background: gpui_kit::WindowBackgroundAppearance::Opaque,
             ..Default::default()
         },
         |window, cx| {

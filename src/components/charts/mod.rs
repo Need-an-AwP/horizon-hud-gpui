@@ -1,4 +1,4 @@
-use gpui::{
+use gpui_kit::{
     AnyElement, Bounds, PathBuilder, Pixels, Rgba, Window, canvas, div, point, prelude::*, px, rgb,
 };
 
@@ -157,7 +157,7 @@ fn chart_with_center_label(
     chart: impl IntoElement,
     label: impl IntoElement,
     color: Rgba,
-) -> gpui::Div {
+) -> gpui_kit::Div {
     div()
         .relative()
         .flex()

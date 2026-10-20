@@ -1,7 +1,7 @@
-use gpui::{AppContext, Context, Entity, Window, colors::DefaultAppearance};
+use gpui_kit::{AppContext, Context, Entity, Window, colors::DefaultAppearance};
 
 use super::colors::Colors;
-use gpui_component::{
+use gpui_kit::component::{
     Icon, IconName, Theme, ThemeMode,
     input::{InputEvent, InputState},
 };

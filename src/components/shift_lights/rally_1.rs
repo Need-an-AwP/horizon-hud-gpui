@@ -1,5 +1,5 @@
-use gpui::{div, prelude::*, px, relative, Context, Entity, IntoElement, Window};
-use gpui_component::{
+use gpui_kit::{div, prelude::*, px, relative, Context, Entity, IntoElement, Window};
+use gpui_kit::component::{
     input::{Input, InputEvent, InputState},
     slider::{SliderEvent, SliderState, SliderValue},
     Sizable, Size,
@@ -215,11 +215,11 @@ impl SettingsControls {
     }
 }
 
-pub fn render_hud(props: &HudTelemetryProps, cfg: &Rally1Config) -> gpui::AnyElement {
+pub fn render_hud(props: &HudTelemetryProps, cfg: &Rally1Config) -> gpui_kit::AnyElement {
     let thickness = cfg.thickness_px.max(1) as f32;
     let lit_opacity = cfg.lit_opacity;
     let dim_opacity = cfg.dim_opacity;
-    let zone_colors: [gpui::Rgba; 5] = match props.calibration {
+    let zone_colors: [gpui_kit::Rgba; 5] = match props.calibration {
         CalibrationState::Ready { rpm_ratio, .. } => {
             let (on_count, flash) =
                 calc_linear_lights(rpm_ratio, cfg.blink_percent / 100.0, LIGHT_STEPS);
@@ -274,7 +274,7 @@ pub fn render_settings(
     view: &Settings,
     colors: &Colors,
     cx: &mut Context<Settings>,
-) -> gpui::AnyElement {
+) -> gpui_kit::AnyElement {
     let cfg = crate::session::shift_lights().rally_1;
     let defaults = Rally1Config::default();
     let controls = &view.shift_lights.rally_1;
@@ -283,7 +283,7 @@ pub fn render_settings(
     let thickness_control = input_apply_control(
         Input::new(&controls.thickness)
             .w(px(96.))
-            .with_size(Size::Small),
+            .with_size(Size::Medium),
         Some("px"),
         "rally-thickness-apply",
         input_differs(&controls.thickness, cfg.thickness_px, cx),

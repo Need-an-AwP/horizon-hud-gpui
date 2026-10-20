@@ -1,5 +1,5 @@
-use gpui::{Context, Entity, IntoElement, Window, div, prelude::*, px, relative};
-use gpui_component::{
+use gpui_kit::{Context, Entity, IntoElement, Window, div, prelude::*, px, relative};
+use gpui_kit::component::{
     Icon, IconName, Sizable, Size,
     button::{Button, ButtonVariants},
     input::InputState,
@@ -75,7 +75,7 @@ impl Settings {
         colors: &Colors,
         title: &'static str,
         description: &'static str,
-    ) -> gpui::Div {
+    ) -> gpui_kit::Div {
         Self::setting_row(
             colors,
             title,
@@ -98,7 +98,7 @@ impl Settings {
         title: &'static str,
         description: &'static str,
         control: impl IntoElement,
-    ) -> gpui::Div {
+    ) -> gpui_kit::Div {
         div()
             .flex()
             .flex_row()
@@ -154,7 +154,7 @@ impl Settings {
         show_reset: bool,
         cx: &mut Context<Self>,
         on_reset: impl Fn(&mut Self, &mut Window, &mut Context<Self>) + 'static,
-    ) -> gpui::Div {
+    ) -> gpui_kit::Div {
         div()
             .flex()
             .items_center()
@@ -167,7 +167,7 @@ impl Settings {
             })
     }
 
-    pub(super) fn warning_hint(colors: &Colors, text: &'static str) -> gpui::Div {
+    pub(super) fn warning_hint(colors: &Colors, text: &'static str) -> gpui_kit::Div {
         div()
             .flex()
             .flex_row()
@@ -204,7 +204,7 @@ impl Settings {
         warning: Option<&'static str>,
         cx: &mut Context<Self>,
         on_reset: impl Fn(&mut Self, &mut Window, &mut Context<Self>) + 'static,
-    ) -> gpui::Div {
+    ) -> gpui_kit::Div {
         div()
             .flex()
             .flex_row()
@@ -320,7 +320,7 @@ impl Settings {
         colors: &Colors,
         cx: &mut Context<Self>,
         on_apply: impl Fn(&mut Self, &mut Window, &mut Context<Self>) + 'static,
-    ) -> gpui::Div {
+    ) -> gpui_kit::Div {
         div()
             .flex()
             .items_center()

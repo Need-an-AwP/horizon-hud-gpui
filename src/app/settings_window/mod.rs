@@ -1,7 +1,7 @@
 use std::sync::atomic::{AtomicU8, Ordering};
 
-use gpui::{App, Entity, colors::DefaultAppearance};
-use gpui_component::input::InputState;
+use gpui_kit::{App, Entity, colors::DefaultAppearance};
+use gpui_kit::component::input::InputState;
 
 use section::SettingsSection;
 

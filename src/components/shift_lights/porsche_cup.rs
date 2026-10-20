@@ -1,5 +1,5 @@
-use gpui::{div, prelude::*, px, Context, Entity, IntoElement, Window};
-use gpui_component::{
+use gpui_kit::{div, prelude::*, px, Context, Entity, IntoElement, Window};
+use gpui_kit::component::{
     input::{Input, InputEvent, InputState},
     slider::{SliderEvent, SliderState, SliderValue},
     Sizable, Size,
@@ -238,7 +238,7 @@ impl SettingsControls {
     }
 }
 
-pub fn render_hud(props: &HudTelemetryProps, cfg: &PorscheCupConfig) -> gpui::AnyElement {
+pub fn render_hud(props: &HudTelemetryProps, cfg: &PorscheCupConfig) -> gpui_kit::AnyElement {
     let position = cfg.position;
     let diameter = cfg.diameter_px as f32;
     let gap = cfg.gap_px as f32;
@@ -299,7 +299,7 @@ pub fn render_settings(
     view: &Settings,
     colors: &Colors,
     cx: &mut Context<Settings>,
-) -> gpui::AnyElement {
+) -> gpui_kit::AnyElement {
     let cfg = crate::session::shift_lights().porsche_cup;
     let defaults = PorscheCupConfig::default();
     let controls = &view.shift_lights.porsche_cup;
@@ -310,7 +310,7 @@ pub fn render_settings(
     let diameter_control = input_apply_control(
         Input::new(&controls.diameter)
             .w(px(96.))
-            .with_size(Size::Small),
+            .with_size(Size::Medium),
         Some("px"),
         "porsche-diameter-apply",
         input_differs(&controls.diameter, cfg.diameter_px, cx),
@@ -319,7 +319,7 @@ pub fn render_settings(
         |this, _, cx| this.shift_lights.porsche_cup.apply_diameter(cx),
     );
     let gap_control = input_apply_control(
-        Input::new(&controls.gap).w(px(96.)).with_size(Size::Small),
+        Input::new(&controls.gap).w(px(96.)).with_size(Size::Medium),
         Some("px"),
         "porsche-gap-apply",
         input_differs(&controls.gap, cfg.gap_px, cx),
@@ -330,7 +330,7 @@ pub fn render_settings(
     let offset_control = input_apply_control(
         Input::new(&controls.offset)
             .w(px(96.))
-            .with_size(Size::Small),
+            .with_size(Size::Medium),
         Some("px"),
         "porsche-offset-apply",
         input_differs(&controls.offset, cfg.offset_px, cx),
@@ -514,7 +514,7 @@ fn subscribe_input(
     .detach();
 }
 
-fn shift_light_circle(diameter: f32, color: gpui::Rgba) -> gpui::Div {
+fn shift_light_circle(diameter: f32, color: gpui_kit::Rgba) -> gpui_kit::Div {
     div()
         .flex_none()
         .w(px(diameter))
@@ -528,7 +528,7 @@ fn shift_circle_strip(
     diameter: f32,
     gap: f32,
     cells: impl IntoIterator<Item = impl IntoElement>,
-) -> gpui::Div {
+) -> gpui_kit::Div {
     match position {
         EdgePosition::Left | EdgePosition::Right => div()
             .flex()
@@ -550,7 +550,7 @@ fn shift_circle_strip(
     }
 }
 
-fn segmented_row(colors: &Colors) -> gpui::Div {
+fn segmented_row(colors: &Colors) -> gpui_kit::Div {
     div()
         .flex()
         .flex_row()
@@ -608,7 +608,7 @@ fn position_control(
     selected: EdgePosition,
     colors: &Colors,
     cx: &mut Context<Settings>,
-) -> gpui::Div {
+) -> gpui_kit::Div {
     segmented_row(colors)
         .child(choice_button(
             "porsche-bottom",

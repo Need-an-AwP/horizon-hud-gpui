@@ -2,8 +2,8 @@ pub mod bar;
 pub mod porsche_cup;
 pub mod rally_1;
 
-use gpui::{div, prelude::*, px, Context, Entity, IntoElement, SharedString, Window};
-use gpui_component::{
+use gpui_kit::{div, prelude::*, px, Context, Entity, IntoElement, SharedString, Window};
+use gpui_kit::component::{
     select::{Select, SelectEvent, SelectItem, SelectState},
     Icon, IndexPath, Sizable, Size,
 };
@@ -141,7 +141,7 @@ impl ShiftLightsControls {
     }
 }
 
-pub fn render_hud(props: &HudTelemetryProps, settings: &ShiftLightsSettings) -> gpui::AnyElement {
+pub fn render_hud(props: &HudTelemetryProps, settings: &ShiftLightsSettings) -> gpui_kit::AnyElement {
     match settings.style {
         ShiftLightsStyle::Bar => bar::render_hud(props, &settings.bar),
         ShiftLightsStyle::PorscheCup => porsche_cup::render_hud(props, &settings.porsche_cup),
@@ -153,7 +153,7 @@ pub fn render_settings(
     view: &Settings,
     colors: &Colors,
     cx: &mut Context<Settings>,
-) -> gpui::AnyElement {
+) -> gpui_kit::AnyElement {
     let style = crate::session::shift_lights().style;
     let style_row = setting_row_with_reset(
         colors,
@@ -163,7 +163,7 @@ pub fn render_settings(
         div().flex_none().w(px(228.)).child(
             Select::new(&view.shift_lights.style_select)
                 .w_full()
-                .with_size(Size::Small)
+                .with_size(Size::Medium)
                 .icon(Icon::empty().path("icons/chevron-down.svg"))
                 .bg(colors.container)
                 .border_color(colors.border),

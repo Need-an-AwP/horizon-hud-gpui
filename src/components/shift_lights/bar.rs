@@ -1,5 +1,5 @@
-use gpui::{div, prelude::*, px, relative, Context, Entity, IntoElement, Window};
-use gpui_component::{
+use gpui_kit::{div, prelude::*, px, relative, Context, Entity, IntoElement, Window};
+use gpui_kit::component::{
     input::{Input, InputEvent, InputState},
     slider::{SliderEvent, SliderState, SliderValue},
     Sizable, Size,
@@ -267,7 +267,7 @@ impl SettingsControls {
     }
 }
 
-pub fn render_hud(props: &HudTelemetryProps, cfg: &BarConfig) -> gpui::AnyElement {
+pub fn render_hud(props: &HudTelemetryProps, cfg: &BarConfig) -> gpui_kit::AnyElement {
     let position = cfg.position;
     let thickness = cfg.thickness_px as f32;
     let gap = cfg.gap_px as f32;
@@ -322,7 +322,7 @@ pub fn render_settings(
     view: &Settings,
     colors: &Colors,
     cx: &mut Context<Settings>,
-) -> gpui::AnyElement {
+) -> gpui_kit::AnyElement {
     let cfg = crate::session::shift_lights().bar;
     let defaults = BarConfig::default();
     let controls = &view.shift_lights.bar;
@@ -339,7 +339,7 @@ pub fn render_settings(
     let thickness_control = input_apply_control(
         Input::new(&controls.thickness)
             .w(px(96.))
-            .with_size(Size::Small),
+            .with_size(Size::Medium),
         Some("px"),
         "bar-thickness-apply",
         input_differs(&controls.thickness, cfg.thickness_px, cx),
@@ -348,7 +348,7 @@ pub fn render_settings(
         |this, _, cx| this.shift_lights.bar.apply_thickness(cx),
     );
     let gap_control = input_apply_control(
-        Input::new(&controls.gap).w(px(96.)).with_size(Size::Small),
+        Input::new(&controls.gap).w(px(96.)).with_size(Size::Medium),
         Some("px"),
         "bar-gap-apply",
         input_differs(&controls.gap, cfg.gap_px, cx),
@@ -357,7 +357,7 @@ pub fn render_settings(
         |this, _, cx| this.shift_lights.bar.apply_gap(cx),
     );
     let offset_control = input_apply_control(
-        Input::new(&controls.offset).w(px(96.)).with_size(Size::Small),
+        Input::new(&controls.offset).w(px(96.)).with_size(Size::Medium),
         Some("px"),
         "bar-offset-apply",
         input_differs(&controls.offset, cfg.offset_px, cx),
@@ -557,7 +557,7 @@ fn shift_light_strip(
     thickness: f32,
     gap: f32,
     cells: impl IntoIterator<Item = impl IntoElement>,
-) -> gpui::Div {
+) -> gpui_kit::Div {
     match position {
         EdgePosition::Left | EdgePosition::Right => div()
             .flex()
@@ -575,7 +575,7 @@ fn shift_light_strip(
     }
 }
 
-fn shift_light_cell(position: EdgePosition, thickness: f32, color: gpui::Rgba) -> gpui::Div {
+fn shift_light_cell(position: EdgePosition, thickness: f32, color: gpui_kit::Rgba) -> gpui_kit::Div {
     let cell = div().flex_1().bg(color);
     if position.is_vertical() {
         cell.w(px(thickness))
@@ -590,7 +590,7 @@ fn calibrate_progress_cell(
     vertical: bool,
     lit_opacity: f32,
     thickness: f32,
-) -> gpui::Div {
+) -> gpui_kit::Div {
     let base = div()
         .flex_1()
         .overflow_hidden()
@@ -635,7 +635,7 @@ fn calibrate_progress_cell(
     }
 }
 
-fn segmented_row(colors: &Colors) -> gpui::Div {
+fn segmented_row(colors: &Colors) -> gpui_kit::Div {
     div()
         .flex()
         .flex_row()
@@ -709,7 +709,7 @@ fn position_control(
     selected: EdgePosition,
     colors: &Colors,
     cx: &mut Context<Settings>,
-) -> gpui::Div {
+) -> gpui_kit::Div {
     segmented_row(colors)
         .child(choice_button(
             "bar-bottom",
@@ -750,7 +750,7 @@ fn direction_control(
     selected: BarDirection,
     colors: &Colors,
     cx: &mut Context<Settings>,
-) -> gpui::Div {
+) -> gpui_kit::Div {
     let (first_id, first_label, first_direction, second_id, second_label, second_direction) =
         if position.is_vertical() {
             (

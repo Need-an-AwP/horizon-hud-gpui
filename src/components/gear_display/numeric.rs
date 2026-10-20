@@ -1,7 +1,7 @@
-use gpui::{
+use gpui_kit::{
     AnyElement, Context, Entity, FontWeight, Window, div, prelude::*, px, relative,
 };
-use gpui_component::{
+use gpui_kit::component::{
     Sizable, Size,
     input::{Input, InputEvent, InputState},
     slider::{SliderEvent, SliderState, SliderValue},
@@ -221,7 +221,7 @@ pub fn render_settings(view: &Settings, colors: &Colors, cx: &mut Context<Settin
     let size_control = input_apply_control(
         Input::new(&view.gear_display.numeric.size)
             .w(px(96.))
-            .with_size(Size::Small),
+            .with_size(Size::Medium),
         Some("px"),
         "gear-num-size-apply",
         input_differs(&view.gear_display.numeric.size, cfg.size_px, cx),

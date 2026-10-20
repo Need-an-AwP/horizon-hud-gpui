@@ -1,6 +1,6 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use gpui::{Context, Render, Timer, Window, div, hsla, prelude::*, rgb};
+use gpui_kit::{Context, Render, Window, div, hsla, prelude::*, rgb};
 
 use crate::components::{charts, gear_display, shift_lights};
 use crate::core::calibration::{self, CalibrationParams, TelemetryEngine};
@@ -67,7 +67,9 @@ fn start_sample_pump(cx: &mut Context<HudWindow>) {
                 })
                 .ok();
             }
-            Timer::after(std::time::Duration::from_secs_f64(1.0 / SAMPLE_HZ as f64)).await;
+            cx.background_executor()
+                .timer(std::time::Duration::from_secs_f64(1.0 / SAMPLE_HZ as f64))
+                .await;
         }
     })
     .detach();

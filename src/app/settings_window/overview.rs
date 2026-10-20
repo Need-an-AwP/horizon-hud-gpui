@@ -1,5 +1,5 @@
-use gpui::{Context, IntoElement, div, prelude::*, px, rgb};
-use gpui_component::{
+use gpui_kit::{Context, IntoElement, div, prelude::*, px, rgb};
+use gpui_kit::component::{
     Icon, Sizable, Size, StyledExt,
     button::{Button, ButtonVariants},
     tooltip::Tooltip,
@@ -177,7 +177,7 @@ impl Settings {
                     .child("配置指南")
                     .on_click(cx.listener(move |_, _, _, _| {
                         let _ = webbrowser::open(
-                            "https://github.com/Need-an-AwP/horizon-hud-gpui?tab=readme-ov-file",
+                            "https://github.com/Need-an-AwP/horizon-hud-gpui?tab=readme-ov-file#%E4%BD%BF%E7%94%A8%E6%96%B9%E6%B3%95",
                         );
                     })),
             )
@@ -330,7 +330,7 @@ impl Settings {
         label: &'static str,
         value: &'static str,
         detail: &str,
-        value_color: gpui::Rgba,
+        value_color: gpui_kit::Rgba,
         icon_path: &'static str,
         section: SettingsSection,
         show_reset: bool,

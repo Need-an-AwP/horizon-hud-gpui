@@ -1,7 +1,9 @@
-use gpui::{AnyElement, Context, Entity, IntoElement, SharedString, Window, div, prelude::*, px};
-use gpui_component::{
-    select::{Select, SelectEvent, SelectItem, SelectState},
+use gpui_kit::component::{
     Icon, IndexPath, Sizable, Size,
+    select::{Select, SelectEvent, SelectItem, SelectState},
+};
+use gpui_kit::{
+    AnyElement, Context, Entity, IntoElement, SharedString, Window, div, prelude::*, px,
 };
 use serde::{Deserialize, Serialize};
 
@@ -84,11 +86,7 @@ pub struct GearDisplayControls {
 }
 
 impl GearDisplayControls {
-    pub fn new(
-        cfg: &GearDisplaySettings,
-        window: &mut Window,
-        cx: &mut Context<Settings>,
-    ) -> Self {
+    pub fn new(cfg: &GearDisplaySettings, window: &mut Window, cx: &mut Context<Settings>) -> Self {
         let style_select = cx.new(|cx| {
             SelectState::new(
                 vec![GearDisplayStyle::SevenSegment, GearDisplayStyle::Numeric],
@@ -129,18 +127,12 @@ pub fn render_hud(props: &HudTelemetryProps, settings: &GearDisplaySettings) -> 
         return div().absolute().into_any_element();
     }
     match settings.style {
-        GearDisplayStyle::SevenSegment => {
-            seven_segment::render_hud(props, &settings.seven_segment)
-        }
+        GearDisplayStyle::SevenSegment => seven_segment::render_hud(props, &settings.seven_segment),
         GearDisplayStyle::Numeric => numeric::render_hud(props, &settings.numeric),
     }
 }
 
-pub fn render_settings(
-    view: &Settings,
-    colors: &Colors,
-    cx: &mut Context<Settings>,
-) -> AnyElement {
+pub fn render_settings(view: &Settings, colors: &Colors, cx: &mut Context<Settings>) -> AnyElement {
     let visible = session::gear_display().visible;
     let visible_row = setting_row_with_reset(
         colors,
@@ -176,7 +168,7 @@ pub fn render_settings(
         div().flex_none().w(px(228.)).child(
             Select::new(&view.gear_display.style_select)
                 .w_full()
-                .with_size(Size::Small)
+                .with_size(Size::Medium)
                 .icon(Icon::empty().path("icons/chevron-down.svg"))
                 .bg(colors.container)
                 .border_color(colors.border),
@@ -185,9 +177,10 @@ pub fn render_settings(
         None,
         cx,
         |this, window, cx| {
-            session::update_gear_display(|settings| settings.style = GearDisplayStyle::SevenSegment);
-            this.gear_display
-                .sync(&session::gear_display(), window, cx);
+            session::update_gear_display(|settings| {
+                settings.style = GearDisplayStyle::SevenSegment
+            });
+            this.gear_display.sync(&session::gear_display(), window, cx);
             cx.notify();
         },
     );

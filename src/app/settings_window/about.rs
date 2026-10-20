@@ -1,5 +1,5 @@
-use gpui::{Context, IntoElement, div, prelude::*, px};
-use gpui_component::{Icon, Sizable, StyledExt, scroll::ScrollableElement};
+use gpui_kit::{Context, IntoElement, div, prelude::*, px};
+use gpui_kit::component::{Icon, Sizable, StyledExt, scroll::ScrollableElement};
 
 use super::{Settings, colors::Colors};
 

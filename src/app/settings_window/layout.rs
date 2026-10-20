@@ -1,5 +1,5 @@
-use gpui::{Context, IntoElement, Render, Window, colors::DefaultAppearance, div, prelude::*, px};
-use gpui_component::{Sizable, Size, button::Button};
+use gpui_kit::{Context, IntoElement, Render, Window, colors::DefaultAppearance, div, prelude::*, px};
+use gpui_kit::component::{Sizable, Size, button::Button};
 
 use super::section::SettingsSection;
 

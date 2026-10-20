@@ -8,9 +8,8 @@ mod tray;
 
 use std::time::Duration;
 
-use gpui::{
-    App, AppContext, Application, Timer, WindowBackgroundAppearance, WindowBounds, WindowKind,
-    WindowOptions,
+use gpui_kit::{
+    App, AppContext, WindowBackgroundAppearance, WindowBounds, WindowKind, WindowOptions,
 };
 
 use app::hud_window::HudWindow;
@@ -22,10 +21,10 @@ fn main() {
     }
     session::load_and_apply();
     tray::spawn();
-    Application::new()
+    gpui_kit::application()
         .with_assets(assets::Assets)
         .run(|cx: &mut App| {
-            gpui_component::init(cx);
+            gpui_kit::init(cx);
             cx.init_colors();
 
             let display = cx
@@ -36,7 +35,9 @@ fn main() {
 
             cx.spawn(async move |cx| {
                 loop {
-                    Timer::after(Duration::from_millis(50)).await;
+                    cx.background_executor()
+                        .timer(Duration::from_millis(50))
+                        .await;
                     let _ = cx.update(|cx| {
                         if platform::take_activate_request() {
                             app::settings_window::request_open();
