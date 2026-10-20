@@ -3,17 +3,19 @@ use gpui_kit::{
     prelude::*, px, relative,
 };
 use gpui_kit::component::{
-    Sizable, Size,
     input::{Input, InputEvent, InputState},
-    slider::{SliderEvent, SliderState, SliderValue},
+    Sizable, Size,
 };
 use serde::{Deserialize, Serialize};
 
 use crate::app::settings_window::Settings;
 use crate::app::settings_window::colors::Colors;
 use crate::components::shared::color::with_opacity;
+use crate::components::shared::number_field::{
+    NumberField, NumberFieldState, opacity_as_percent, opacity_from_percent,
+};
 use crate::components::shared::settings_ui::{
-    input_apply_control, input_differs, setting_row_with_reset, slider_row,
+    input_apply_control, input_differs, setting_row_with_reset, subscribe_number_field,
 };
 use crate::core::props::HudTelemetryProps;
 use crate::session;
@@ -52,77 +54,77 @@ impl Default for SevenSegmentConfig {
 }
 
 pub struct SettingsControls {
-    pub x: Entity<SliderState>,
-    pub y: Entity<SliderState>,
+    pub x: Entity<NumberFieldState>,
+    pub y: Entity<NumberFieldState>,
     pub size: Entity<InputState>,
-    pub lit_opacity: Entity<SliderState>,
-    pub dim_opacity: Entity<SliderState>,
+    pub lit_opacity: Entity<NumberFieldState>,
+    pub dim_opacity: Entity<NumberFieldState>,
 }
 
 impl SettingsControls {
     pub fn new(cfg: &SevenSegmentConfig, window: &mut Window, cx: &mut Context<Settings>) -> Self {
-        let x = cx.new(|_| {
-            SliderState::new()
+        let x = cx.new(|cx| {
+            NumberFieldState::builder()
                 .min(0.0)
                 .max(100.0)
                 .step(0.5)
                 .default_value(cfg.x_ratio * 100.0)
+                .unit("%")
+                .decimals(1)
+                .build(window, cx)
         });
-        let y = cx.new(|_| {
-            SliderState::new()
+        let y = cx.new(|cx| {
+            NumberFieldState::builder()
                 .min(0.0)
                 .max(100.0)
                 .step(0.5)
                 .default_value(cfg.y_ratio * 100.0)
+                .unit("%")
+                .decimals(1)
+                .build(window, cx)
         });
         let size = cx.new(|cx| InputState::new(window, cx).default_value(cfg.size_px.to_string()));
-        let lit_opacity = cx.new(|_| {
-            SliderState::new()
+        let lit_opacity = cx.new(|cx| {
+            NumberFieldState::builder()
                 .min(0.0)
-                .max(1.0)
-                .step(0.05)
-                .default_value(cfg.lit_opacity)
+                .max(100.0)
+                .step(1.0)
+                .default_value(opacity_as_percent(cfg.lit_opacity))
+                .unit("%")
+                .decimals(0)
+                .build(window, cx)
         });
-        let dim_opacity = cx.new(|_| {
-            SliderState::new()
+        let dim_opacity = cx.new(|cx| {
+            NumberFieldState::builder()
                 .min(0.0)
-                .max(1.0)
-                .step(0.05)
-                .default_value(cfg.dim_opacity)
+                .max(100.0)
+                .step(1.0)
+                .default_value(opacity_as_percent(cfg.dim_opacity))
+                .unit("%")
+                .decimals(0)
+                .build(window, cx)
         });
 
-        for slider in [&x, &y] {
-            cx.subscribe(slider, |this: &mut Settings, _, _: &SliderEvent, cx| {
-                let x_percent = slider_percent(this.gear_display.seven_segment.x.read(cx).value());
-                let y_percent = slider_percent(this.gear_display.seven_segment.y.read(cx).value());
-                session::update_gear_display(|settings| {
-                    settings.seven_segment.x_ratio = (x_percent / 100.0).clamp(0.0, 1.0);
-                    settings.seven_segment.y_ratio = (y_percent / 100.0).clamp(0.0, 1.0);
-                });
-                cx.notify();
-            })
-            .detach();
-        }
-        cx.subscribe(&lit_opacity, |_this, _, event: &SliderEvent, cx| {
-            if let SliderEvent::Change(SliderValue::Single(opacity)) = event {
-                let opacity = opacity.clamp(0.0, 1.0);
-                session::update_gear_display(|settings| {
-                    settings.seven_segment.lit_opacity = opacity;
-                });
-                cx.notify();
-            }
-        })
-        .detach();
-        cx.subscribe(&dim_opacity, |_this, _, event: &SliderEvent, cx| {
-            if let SliderEvent::Change(SliderValue::Single(opacity)) = event {
-                let opacity = opacity.clamp(0.0, 1.0);
-                session::update_gear_display(|settings| {
-                    settings.seven_segment.dim_opacity = opacity;
-                });
-                cx.notify();
-            }
-        })
-        .detach();
+        subscribe_number_field(&x, cx, |value| {
+            session::update_gear_display(|settings| {
+                settings.seven_segment.x_ratio = (value / 100.0).clamp(0.0, 1.0);
+            });
+        });
+        subscribe_number_field(&y, cx, |value| {
+            session::update_gear_display(|settings| {
+                settings.seven_segment.y_ratio = (value / 100.0).clamp(0.0, 1.0);
+            });
+        });
+        subscribe_number_field(&lit_opacity, cx, |value| {
+            session::update_gear_display(|settings| {
+                settings.seven_segment.lit_opacity = opacity_from_percent(value);
+            });
+        });
+        subscribe_number_field(&dim_opacity, cx, |value| {
+            session::update_gear_display(|settings| {
+                settings.seven_segment.dim_opacity = opacity_from_percent(value);
+            });
+        });
         cx.subscribe_in(
             &size,
             window,
@@ -144,20 +146,20 @@ impl SettingsControls {
     }
 
     pub fn sync(&self, cfg: &SevenSegmentConfig, window: &mut Window, cx: &mut Context<Settings>) {
-        self.x.update(cx, |slider, cx| {
-            slider.set_value(cfg.x_ratio * 100.0, window, cx);
+        self.x.update(cx, |field, cx| {
+            field.set_value(cfg.x_ratio * 100.0, window, cx);
         });
-        self.y.update(cx, |slider, cx| {
-            slider.set_value(cfg.y_ratio * 100.0, window, cx);
+        self.y.update(cx, |field, cx| {
+            field.set_value(cfg.y_ratio * 100.0, window, cx);
         });
         self.size.update(cx, |input, cx| {
             input.set_value(cfg.size_px.to_string(), window, cx);
         });
-        self.lit_opacity.update(cx, |slider, cx| {
-            slider.set_value(cfg.lit_opacity, window, cx);
+        self.lit_opacity.update(cx, |field, cx| {
+            field.set_value(opacity_as_percent(cfg.lit_opacity), window, cx);
         });
-        self.dim_opacity.update(cx, |slider, cx| {
-            slider.set_value(cfg.dim_opacity, window, cx);
+        self.dim_opacity.update(cx, |field, cx| {
+            field.set_value(opacity_as_percent(cfg.dim_opacity), window, cx);
         });
     }
 
@@ -212,21 +214,18 @@ pub fn render_settings(view: &Settings, colors: &Colors, cx: &mut Context<Settin
         cx,
         |this, _, cx| this.gear_display.seven_segment.apply_size(cx),
     );
-
     div()
         .flex()
         .flex_col()
         .gap_3()
-        .child(slider_row(
-            "水平位置",
-            "相对屏幕宽度的位置；50% 时段码表水平居中。",
-            "gear-seg-x-reset",
-            &view.gear_display.seven_segment.x,
+        .child(setting_row_with_reset(
             colors,
-            None,
-            "%",
-            1,
+            "水平位置",
+            "百分比，范围 0–100，步进 0.5，默认 50。",
+            "gear-seg-x-reset",
+            NumberField::new(&view.gear_display.seven_segment.x).unit_color(colors.disabled),
             cfg.x_ratio != defaults.x_ratio,
+            None,
             cx,
             |this, window, cx| {
                 reset_field(this, window, cx, |segment| {
@@ -234,16 +233,14 @@ pub fn render_settings(view: &Settings, colors: &Colors, cx: &mut Context<Settin
                 });
             },
         ))
-        .child(slider_row(
-            "垂直位置",
-            "相对屏幕高度的位置；默认 7.5%。",
-            "gear-seg-y-reset",
-            &view.gear_display.seven_segment.y,
+        .child(setting_row_with_reset(
             colors,
-            None,
-            "%",
-            1,
+            "垂直位置",
+            "百分比，范围 0–100，步进 0.5，默认 7.5。",
+            "gear-seg-y-reset",
+            NumberField::new(&view.gear_display.seven_segment.y).unit_color(colors.disabled),
             cfg.y_ratio != defaults.y_ratio,
+            None,
             cx,
             |this, window, cx| {
                 reset_field(this, window, cx, |segment| {
@@ -254,7 +251,7 @@ pub fn render_settings(view: &Settings, colors: &Colors, cx: &mut Context<Settin
         .child(setting_row_with_reset(
             colors,
             "大小",
-            "七段数码管的高度，单位像素。",
+            "正整数，单位 px，默认 64。",
             "gear-seg-size-reset",
             size_control,
             cfg.size_px != defaults.size_px,
@@ -266,16 +263,15 @@ pub fn render_settings(view: &Settings, colors: &Colors, cx: &mut Context<Settin
                 });
             },
         ))
-        .child(slider_row(
-            "亮起透明度",
-            "已点亮段的透明度，范围 0 到 1。",
-            "gear-seg-lit-opacity-reset",
-            &view.gear_display.seven_segment.lit_opacity,
+        .child(setting_row_with_reset(
             colors,
-            opacity_warning,
-            "",
-            2,
+            "亮起透明度",
+            "百分比，范围 0–100，步进 1，默认 100。",
+            "gear-seg-lit-opacity-reset",
+            NumberField::new(&view.gear_display.seven_segment.lit_opacity)
+                .unit_color(colors.disabled),
             cfg.lit_opacity != defaults.lit_opacity,
+            opacity_warning,
             cx,
             |this, window, cx| {
                 reset_field(this, window, cx, |segment| {
@@ -283,16 +279,15 @@ pub fn render_settings(view: &Settings, colors: &Colors, cx: &mut Context<Settin
                 });
             },
         ))
-        .child(slider_row(
-            "熄灭透明度",
-            "未点亮段的透明度，范围 0 到 1。",
-            "gear-seg-dim-opacity-reset",
-            &view.gear_display.seven_segment.dim_opacity,
+        .child(setting_row_with_reset(
             colors,
-            opacity_warning,
-            "",
-            2,
+            "熄灭透明度",
+            "百分比，范围 0–100，步进 1，默认 12。",
+            "gear-seg-dim-opacity-reset",
+            NumberField::new(&view.gear_display.seven_segment.dim_opacity)
+                .unit_color(colors.disabled),
             cfg.dim_opacity != defaults.dim_opacity,
+            opacity_warning,
             cx,
             |this, window, cx| {
                 reset_field(this, window, cx, |segment| {
@@ -304,7 +299,7 @@ pub fn render_settings(view: &Settings, colors: &Colors, cx: &mut Context<Settin
             div()
                 .text_xs()
                 .text_color(colors.disabled)
-                .child("HUD 未收到遥测数据时，挡位会显示为一位 “-”（仅中间 G 段）。"),
+                .child("无遥测数据时显示 “-”。"),
         )
         .into_any_element()
 }
@@ -319,13 +314,6 @@ fn reset_field(
     let cfg = session::gear_display().seven_segment;
     this.gear_display.seven_segment.sync(&cfg, window, cx);
     cx.notify();
-}
-
-fn slider_percent(value: SliderValue) -> f32 {
-    match value {
-        SliderValue::Single(value) => value,
-        SliderValue::Range(start, _) => start,
-    }
 }
 
 fn seven_segment_mask(character: char) -> u8 {

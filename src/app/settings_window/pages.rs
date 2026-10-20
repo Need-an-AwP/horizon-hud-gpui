@@ -113,7 +113,7 @@ impl Settings {
             .child(self.setting_row_with_reset(
                 colors,
                 "监听地址",
-                "UDP 绑定的本机地址与端口，默认为 127.0.0.1:9999。",
+                "本机 UDP 地址与端口，默认 127.0.0.1:9999。",
                 "listen-reset",
                 listen_control,
                 !listen_uses_default,
@@ -124,7 +124,7 @@ impl Settings {
             .child(self.setting_row_with_reset(
                 colors,
                 "UDP 转发",
-                "开启后，将收到的游戏遥测数据包原样转发到指定地址，供其它应用使用。默认关闭，目标默认为 127.0.0.1:10000。",
+                "原样转发遥测包。默认关闭，目标 127.0.0.1:10000。",
                 "forward-reset",
                 forward_control,
                 !forward_uses_default,
@@ -160,7 +160,7 @@ impl Settings {
             .child(self.setting_row_with_reset(
                 colors,
                 "校准提示",
-                "在 HUD 中央显示等待数据、校准说明与进度文字。",
+                "在画面中央显示校准进度。",
                 "calibrate-hint-visible-reset",
                 self.switch_control(
                     "calibrate-hint-visible",
@@ -177,7 +177,7 @@ impl Settings {
             .child(self.setting_row_with_reset(
                 colors,
                 "更严格校准条件",
-                "开启后需同时按住手刹和油门才能校准；关闭后只需按住油门拉到断油转速。",
+                "开启需同时按住手刹和油门；关闭只需按住油门。",
                 "strict-calibrate-conditions-reset",
                 self.switch_control(
                     "strict-calibrate-conditions",
@@ -194,7 +194,7 @@ impl Settings {
             .child(self.setting_row_with_reset(
                 colors,
                 "记住已校准车辆",
-                "开启后将断油转速按车辆写入配置，下次遇到同一车辆时自动恢复。关闭后不再读取或写入，已有记录会保留。",
+                "按车辆保存断油转速。关闭后不再读写，记录仍保留。",
                 "remember-calibrated-cars-reset",
                 self.switch_control(
                     "remember-calibrated-cars",
@@ -211,7 +211,7 @@ impl Settings {
             .child(self.setting_row_with_reset(
                 colors,
                 "校准时长",
-                "燃油切断检测需保持的最短时间，单位毫秒。确认后立即生效。",
+                "整数毫秒，范围 100–5000，默认 500。",
                 "calibrate-ms-reset",
                 calibrate_ms_control,
                 general.calibrate_ms != DEFAULT_CALIBRATE_MS,

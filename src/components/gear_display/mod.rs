@@ -34,8 +34,8 @@ impl GearDisplayStyle {
 
     pub fn description(self) -> &'static str {
         match self {
-            Self::SevenSegment => "用七段数码管显示当前挡位，可放在屏幕任意位置。",
-            Self::Numeric => "用 Bahnschrift 显示大号挡位，字重可沿可变轴连续调节。",
+            Self::SevenSegment => "七段数码管。",
+            Self::Numeric => "大号数字。",
         }
     }
 
@@ -137,7 +137,7 @@ pub fn render_settings(view: &Settings, colors: &Colors, cx: &mut Context<Settin
     let visible_row = setting_row_with_reset(
         colors,
         "显示挡位表",
-        "在 HUD 上显示当前车辆挡位。",
+        "显示当前挡位。",
         "gear-display-visible-reset",
         switch_control(
             "gear-display-visible",

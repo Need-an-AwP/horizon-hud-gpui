@@ -1,7 +1,6 @@
 use gpui_kit::{div, prelude::*, px, relative, Context, Entity, IntoElement, Window};
 use gpui_kit::component::{
     input::{Input, InputEvent, InputState},
-    slider::{SliderEvent, SliderState, SliderValue},
     Sizable, Size,
 };
 use serde::{Deserialize, Serialize};
@@ -12,9 +11,12 @@ use crate::components::shared::color::with_opacity;
 use crate::components::shared::rpm_math::{
     calc_linear_lights, calibrate_segment_fill, is_blink_lit,
 };
+use crate::components::shared::number_field::{
+    NumberField, NumberFieldState, opacity_as_percent, opacity_from_percent,
+};
 use crate::components::shared::settings_ui::{
     input_apply_control, input_differs, separator, setting_row_with_reset, settings_group,
-    slider_row,
+    subscribe_number_field,
 };
 use crate::core::props::{CalibrationState, HudTelemetryProps};
 
@@ -68,29 +70,30 @@ impl Default for Rally1Config {
 }
 
 pub struct SettingsControls {
-    pub y: Entity<SliderState>,
+    pub y: Entity<NumberFieldState>,
     pub thickness: Entity<InputState>,
-    pub width: Entity<SliderState>,
-    pub lit_opacity: Entity<SliderState>,
-    pub dim_opacity: Entity<SliderState>,
-    pub blink_percent: Entity<SliderState>,
-    pub blink_ms: Entity<SliderState>,
+    pub width: Entity<NumberFieldState>,
+    pub lit_opacity: Entity<NumberFieldState>,
+    pub dim_opacity: Entity<NumberFieldState>,
+    pub blink_percent: Entity<NumberFieldState>,
+    pub blink_ms: Entity<NumberFieldState>,
 }
 
 impl SettingsControls {
     pub fn new(cfg: &Rally1Config, window: &mut Window, cx: &mut Context<Settings>) -> Self {
-        let y = cx.new(|_| {
-            SliderState::new()
+        let y = cx.new(|cx| {
+            NumberFieldState::builder()
                 .min(0.0)
                 .max(100.0)
                 .step(0.5)
                 .default_value(cfg.y_ratio * 100.0)
+                .unit("%")
+                .decimals(1)
+                .build(window, cx)
         });
-        subscribe_slider(&y, cx, |value| {
-            if value.is_finite() {
-                let y_ratio = (value / 100.0).clamp(0.0, 1.0);
-                write_cfg(|cfg| cfg.y_ratio = y_ratio);
-            }
+        subscribe_number_field(&y, cx, |value| {
+            let y_ratio = (value / 100.0).clamp(0.0, 1.0);
+            write_cfg(|cfg| cfg.y_ratio = y_ratio);
         });
 
         let thickness = cx.new(|cx| {
@@ -100,73 +103,76 @@ impl SettingsControls {
         });
         subscribe_input(&thickness, window, cx, SettingsControls::apply_thickness);
 
-        let width = cx.new(|_| {
-            SliderState::new()
+        let width = cx.new(|cx| {
+            NumberFieldState::builder()
                 .min(1.0)
                 .max(100.0)
                 .step(1.0)
                 .default_value(cfg.width_percent as f32)
+                .unit("%")
+                .decimals(0)
+                .build(window, cx)
         });
-        subscribe_slider(&width, cx, |value| {
-            if value.is_finite() {
-                let width = (value as usize).clamp(1, 100);
-                write_cfg(|cfg| cfg.width_percent = width);
-            }
-        });
-
-        let lit_opacity = cx.new(|_| {
-            SliderState::new()
-                .min(0.0)
-                .max(1.0)
-                .step(0.05)
-                .default_value(cfg.lit_opacity)
-        });
-        let dim_opacity = cx.new(|_| {
-            SliderState::new()
-                .min(0.0)
-                .max(1.0)
-                .step(0.05)
-                .default_value(cfg.dim_opacity)
-        });
-        subscribe_slider(&lit_opacity, cx, |value| {
-            if value.is_finite() {
-                let value = value.clamp(0.0, 1.0);
-                write_cfg(|cfg| cfg.lit_opacity = value);
-            }
-        });
-        subscribe_slider(&dim_opacity, cx, |value| {
-            if value.is_finite() {
-                let value = value.clamp(0.0, 1.0);
-                write_cfg(|cfg| cfg.dim_opacity = value);
-            }
+        subscribe_number_field(&width, cx, |value| {
+            let width = (value as usize).clamp(1, 100);
+            write_cfg(|cfg| cfg.width_percent = width);
         });
 
-        let blink_percent = cx.new(|_| {
-            SliderState::new()
+        let lit_opacity = cx.new(|cx| {
+            NumberFieldState::builder()
+                .min(0.0)
+                .max(100.0)
+                .step(1.0)
+                .default_value(opacity_as_percent(cfg.lit_opacity))
+                .unit("%")
+                .decimals(0)
+                .build(window, cx)
+        });
+        let dim_opacity = cx.new(|cx| {
+            NumberFieldState::builder()
+                .min(0.0)
+                .max(100.0)
+                .step(1.0)
+                .default_value(opacity_as_percent(cfg.dim_opacity))
+                .unit("%")
+                .decimals(0)
+                .build(window, cx)
+        });
+        subscribe_number_field(&lit_opacity, cx, |value| {
+            write_cfg(|cfg| cfg.lit_opacity = opacity_from_percent(value));
+        });
+        subscribe_number_field(&dim_opacity, cx, |value| {
+            write_cfg(|cfg| cfg.dim_opacity = opacity_from_percent(value));
+        });
+
+        let blink_percent = cx.new(|cx| {
+            NumberFieldState::builder()
                 .min(BLINK_PERCENT_MIN)
                 .max(BLINK_PERCENT_MAX)
                 .step(0.1)
                 .default_value(cfg.blink_percent)
+                .unit("%")
+                .decimals(1)
+                .build(window, cx)
         });
-        subscribe_slider(&blink_percent, cx, |value| {
-            if value.is_finite() {
-                let value = value.clamp(BLINK_PERCENT_MIN, BLINK_PERCENT_MAX);
-                write_cfg(|cfg| cfg.blink_percent = value);
-            }
+        subscribe_number_field(&blink_percent, cx, |value| {
+            let value = value.clamp(BLINK_PERCENT_MIN, BLINK_PERCENT_MAX);
+            write_cfg(|cfg| cfg.blink_percent = value);
         });
 
-        let blink_ms = cx.new(|_| {
-            SliderState::new()
+        let blink_ms = cx.new(|cx| {
+            NumberFieldState::builder()
                 .min(BLINK_MS_MIN as f32)
                 .max(BLINK_MS_MAX as f32)
                 .step(5.0)
                 .default_value(cfg.blink_ms as f32)
+                .unit("ms")
+                .decimals(0)
+                .build(window, cx)
         });
-        subscribe_slider(&blink_ms, cx, |value| {
-            if value.is_finite() {
-                let blink_ms = (value as usize).clamp(BLINK_MS_MIN, BLINK_MS_MAX);
-                write_cfg(|cfg| cfg.blink_ms = blink_ms);
-            }
+        subscribe_number_field(&blink_ms, cx, |value| {
+            let blink_ms = (value as usize).clamp(BLINK_MS_MIN, BLINK_MS_MAX);
+            write_cfg(|cfg| cfg.blink_ms = blink_ms);
         });
 
         Self {
@@ -181,26 +187,26 @@ impl SettingsControls {
     }
 
     pub fn sync(&self, cfg: &Rally1Config, window: &mut Window, cx: &mut Context<Settings>) {
-        self.y.update(cx, |slider, cx| {
-            slider.set_value(cfg.y_ratio * 100.0, window, cx);
+        self.y.update(cx, |field, cx| {
+            field.set_value(cfg.y_ratio * 100.0, window, cx);
         });
         self.thickness.update(cx, |input, cx| {
             input.set_value(cfg.thickness_px.to_string(), window, cx);
         });
-        self.width.update(cx, |slider, cx| {
-            slider.set_value(cfg.width_percent as f32, window, cx);
+        self.width.update(cx, |field, cx| {
+            field.set_value(cfg.width_percent as f32, window, cx);
         });
-        self.lit_opacity.update(cx, |slider, cx| {
-            slider.set_value(cfg.lit_opacity, window, cx);
+        self.lit_opacity.update(cx, |field, cx| {
+            field.set_value(opacity_as_percent(cfg.lit_opacity), window, cx);
         });
-        self.dim_opacity.update(cx, |slider, cx| {
-            slider.set_value(cfg.dim_opacity, window, cx);
+        self.dim_opacity.update(cx, |field, cx| {
+            field.set_value(opacity_as_percent(cfg.dim_opacity), window, cx);
         });
-        self.blink_percent.update(cx, |slider, cx| {
-            slider.set_value(cfg.blink_percent, window, cx);
+        self.blink_percent.update(cx, |field, cx| {
+            field.set_value(cfg.blink_percent, window, cx);
         });
-        self.blink_ms.update(cx, |slider, cx| {
-            slider.set_value(cfg.blink_ms as f32, window, cx);
+        self.blink_ms.update(cx, |field, cx| {
+            field.set_value(cfg.blink_ms as f32, window, cx);
         });
     }
 
@@ -279,7 +285,7 @@ pub fn render_settings(
     let defaults = Rally1Config::default();
     let controls = &view.shift_lights.rally_1;
     let dim_warning = (!crate::core::calibration::shift_lights_calibrated())
-        .then_some("当前处于未校准状态，熄灭透明度可能不可见");
+        .then_some("当前处于未校准状态，熄灭透明度不可见");
     let thickness_control = input_apply_control(
         Input::new(&controls.thickness)
             .w(px(96.))
@@ -291,7 +297,6 @@ pub fn render_settings(
         cx,
         |this, _, cx| this.shift_lights.rally_1.apply_thickness(cx),
     );
-
     div()
         .flex()
         .flex_col()
@@ -300,18 +305,16 @@ pub fn render_settings(
             settings_group(
                 colors,
                 "样式与位置",
-                "灯条横向贴在屏幕上，按屏幕高度的比例决定垂直位置。转速升高时从两侧向中心依次点亮绿、黄、红。",
+                "垂直位置。",
             )
-            .child(slider_row(
-                "垂直位置",
-                "相对屏幕高度的位置，灯条上沿对齐该位置；0% 贴在屏幕顶部。默认 0%。",
-                "rally-y-reset",
-                &controls.y,
+            .child(setting_row_with_reset(
                 colors,
-                None,
-                "%",
-                1,
+                "垂直位置",
+                "百分比，范围 0–100，步进 0.5，默认 0。",
+                "rally-y-reset",
+                NumberField::new(&controls.y).unit_color(colors.disabled),
                 cfg.y_ratio != defaults.y_ratio,
+                None,
                 cx,
                 reset_y,
             )),
@@ -321,25 +324,23 @@ pub fn render_settings(
             settings_group(
                 colors,
                 "尺寸与布局",
-                "五段之间没有间隙，宽度固定为 1/7、1/7、3/7、1/7、1/7。这里调整整条灯相对屏幕的宽度和厚度。",
+                "宽度与厚度。",
             )
-            .child(slider_row(
-                "宽度比例",
-                "相对屏幕宽度的比例，灯条水平居中；默认 100%。",
-                "rally-width-reset",
-                &controls.width,
+            .child(setting_row_with_reset(
                 colors,
-                None,
-                "%",
-                0,
+                "宽度比例",
+                "百分比，范围 1–100，步进 1，默认 100。",
+                "rally-width-reset",
+                NumberField::new(&controls.width).unit_color(colors.disabled),
                 cfg.width_percent != defaults.width_percent,
+                None,
                 cx,
                 reset_width,
             ))
             .child(setting_row_with_reset(
                 colors,
                 "厚度",
-                "灯条高度，单位像素；默认 90 px。",
+                "正整数，单位 px，默认 90。",
                 "rally-thickness-reset",
                 thickness_control,
                 cfg.thickness_px != defaults.thickness_px,
@@ -353,57 +354,49 @@ pub fn render_settings(
             settings_group(
                 colors,
                 "显示效果",
-                "控制灯条闪烁时机与速度，以及亮起与未亮起区域的透明度。未校准时五段为黄色，校准进度从两侧向中心逐段变为绿色。",
+                "闪烁与透明度。",
             )
-            .child(slider_row(
-                "闪烁阈值",
-                "达到校准转速的该百分比后，五个区域全部按自身颜色闪烁；范围 80% 到 100%，步进 0.1%；默认 95%。",
-                "rally-blink-reset",
-                &controls.blink_percent,
+            .child(setting_row_with_reset(
                 colors,
-                None,
-                "%",
-                1,
+                "闪烁阈值",
+                "百分比，范围 80–100，步进 0.1，默认 95。",
+                "rally-blink-reset",
+                NumberField::new(&controls.blink_percent).unit_color(colors.disabled),
                 cfg.blink_percent != defaults.blink_percent,
+                None,
                 cx,
                 reset_blink_percent,
             ))
-            .child(slider_row(
-                "闪烁速度",
-                "亮灭切换的半周期时长，数值越小闪烁越快；范围 20 到 200 ms，步进 5 ms；默认 80 ms。",
-                "rally-blink-ms-reset",
-                &controls.blink_ms,
+            .child(setting_row_with_reset(
                 colors,
-                None,
-                " ms",
-                0,
+                "闪烁速度",
+                "整数毫秒，范围 20–200，步进 5，默认 80。越小越快。",
+                "rally-blink-ms-reset",
+                NumberField::new(&controls.blink_ms).unit_color(colors.disabled),
                 cfg.blink_ms != defaults.blink_ms,
+                None,
                 cx,
                 reset_blink_ms,
             ))
-            .child(slider_row(
-                "亮起透明度",
-                "亮起区域的透明度，范围 0 到 1；默认 0.7。",
-                "rally-lit-opacity-reset",
-                &controls.lit_opacity,
+            .child(setting_row_with_reset(
                 colors,
-                None,
-                "",
-                2,
+                "亮起透明度",
+                "百分比，范围 0–100，步进 1，默认 70。",
+                "rally-lit-opacity-reset",
+                NumberField::new(&controls.lit_opacity).unit_color(colors.disabled),
                 cfg.lit_opacity != defaults.lit_opacity,
+                None,
                 cx,
                 reset_lit_opacity,
             ))
-            .child(slider_row(
-                "熄灭透明度",
-                "未亮起区域的透明度，范围 0 到 1；默认 0.5。",
-                "rally-dim-opacity-reset",
-                &controls.dim_opacity,
+            .child(setting_row_with_reset(
                 colors,
-                dim_warning,
-                "",
-                2,
+                "熄灭透明度",
+                "百分比，范围 0–100，步进 1，默认 50。",
+                "rally-dim-opacity-reset",
+                NumberField::new(&controls.dim_opacity).unit_color(colors.disabled),
                 cfg.dim_opacity != defaults.dim_opacity,
+                dim_warning,
                 cx,
                 reset_dim_opacity,
             )),
@@ -413,20 +406,6 @@ pub fn render_settings(
 
 fn write_cfg(f: impl FnOnce(&mut Rally1Config)) {
     crate::session::update_shift_lights(|settings| f(&mut settings.rally_1));
-}
-
-fn subscribe_slider(
-    slider: &Entity<SliderState>,
-    cx: &mut Context<Settings>,
-    on_value: impl Fn(f32) + 'static,
-) {
-    cx.subscribe(slider, move |_this, _, event: &SliderEvent, cx| {
-        if let SliderEvent::Change(SliderValue::Single(value)) = event {
-            on_value(*value);
-            cx.notify();
-        }
-    })
-    .detach();
 }
 
 fn subscribe_input(
@@ -450,8 +429,8 @@ fn subscribe_input(
 fn reset_y(this: &mut Settings, window: &mut Window, cx: &mut Context<Settings>) {
     let value = Rally1Config::default().y_ratio;
     write_cfg(|cfg| cfg.y_ratio = value);
-    this.shift_lights.rally_1.y.update(cx, |slider, cx| {
-        slider.set_value(value * 100.0, window, cx);
+    this.shift_lights.rally_1.y.update(cx, |field, cx| {
+        field.set_value(value * 100.0, window, cx);
     });
     cx.notify();
 }
@@ -459,12 +438,9 @@ fn reset_y(this: &mut Settings, window: &mut Window, cx: &mut Context<Settings>)
 fn reset_width(this: &mut Settings, window: &mut Window, cx: &mut Context<Settings>) {
     let value = Rally1Config::default().width_percent;
     write_cfg(|cfg| cfg.width_percent = value);
-    this.shift_lights
-        .rally_1
-        .width
-        .update(cx, |slider, cx| {
-            slider.set_value(value as f32, window, cx);
-        });
+    this.shift_lights.rally_1.width.update(cx, |field, cx| {
+        field.set_value(value as f32, window, cx);
+    });
     cx.notify();
 }
 
@@ -483,47 +459,35 @@ fn reset_thickness(this: &mut Settings, window: &mut Window, cx: &mut Context<Se
 fn reset_blink_percent(this: &mut Settings, window: &mut Window, cx: &mut Context<Settings>) {
     let value = Rally1Config::default().blink_percent;
     write_cfg(|cfg| cfg.blink_percent = value);
-    this.shift_lights
-        .rally_1
-        .blink_percent
-        .update(cx, |slider, cx| {
-            slider.set_value(value, window, cx);
-        });
+    this.shift_lights.rally_1.blink_percent.update(cx, |field, cx| {
+        field.set_value(value, window, cx);
+    });
     cx.notify();
 }
 
 fn reset_blink_ms(this: &mut Settings, window: &mut Window, cx: &mut Context<Settings>) {
     let value = Rally1Config::default().blink_ms;
     write_cfg(|cfg| cfg.blink_ms = value);
-    this.shift_lights
-        .rally_1
-        .blink_ms
-        .update(cx, |slider, cx| {
-            slider.set_value(value as f32, window, cx);
-        });
+    this.shift_lights.rally_1.blink_ms.update(cx, |field, cx| {
+        field.set_value(value as f32, window, cx);
+    });
     cx.notify();
 }
 
 fn reset_lit_opacity(this: &mut Settings, window: &mut Window, cx: &mut Context<Settings>) {
     let value = Rally1Config::default().lit_opacity;
     write_cfg(|cfg| cfg.lit_opacity = value);
-    this.shift_lights
-        .rally_1
-        .lit_opacity
-        .update(cx, |slider, cx| {
-            slider.set_value(value, window, cx);
-        });
+    this.shift_lights.rally_1.lit_opacity.update(cx, |field, cx| {
+        field.set_value(opacity_as_percent(value), window, cx);
+    });
     cx.notify();
 }
 
 fn reset_dim_opacity(this: &mut Settings, window: &mut Window, cx: &mut Context<Settings>) {
     let value = Rally1Config::default().dim_opacity;
     write_cfg(|cfg| cfg.dim_opacity = value);
-    this.shift_lights
-        .rally_1
-        .dim_opacity
-        .update(cx, |slider, cx| {
-            slider.set_value(value, window, cx);
-        });
+    this.shift_lights.rally_1.dim_opacity.update(cx, |field, cx| {
+        field.set_value(opacity_as_percent(value), window, cx);
+    });
     cx.notify();
 }

@@ -1,6 +1,6 @@
 use std::sync::atomic::{AtomicU8, Ordering};
 
-use gpui_kit::{App, Entity, colors::DefaultAppearance};
+use gpui_kit::{App, Entity, FocusHandle, colors::DefaultAppearance};
 use gpui_kit::component::input::InputState;
 
 use section::SettingsSection;
@@ -24,6 +24,8 @@ mod settings_window;
 mod state;
 
 pub(crate) struct Settings {
+    /// 铺满窗口的根容器；点击空白处时接收焦点，使 Input 失焦。
+    root_focus: FocusHandle,
     appearance_override: Option<DefaultAppearance>,
     selected_section: SettingsSection,
     last_charts_visible: bool,
@@ -44,6 +46,7 @@ pub(crate) struct Settings {
     forward_host_input: Entity<InputState>,
     forward_port_input: Entity<InputState>,
     calibrate_ms_input: Entity<InputState>,
+    launch_command_input: Entity<InputState>,
     pub(crate) shift_lights: crate::components::shift_lights::ShiftLightsControls,
     pub(crate) gear_display: crate::components::gear_display::GearDisplayControls,
 }

@@ -15,6 +15,8 @@ impl Render for Settings {
         };
 
         div()
+            .id("settings-root")
+            .track_focus(&self.root_focus)
             .flex()
             .flex_row()
             .justify_between()

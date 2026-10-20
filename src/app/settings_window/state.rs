@@ -16,6 +16,17 @@ use crate::session;
 
 use super::{Settings, section::SettingsSection};
 
+fn steam_launch_command() -> String {
+    let path = std::env::current_exe()
+        .ok()
+        .map(|path| {
+            let text = path.to_string_lossy();
+            text.strip_prefix(r"\\?\").unwrap_or(&text).to_string()
+        })
+        .unwrap_or_default();
+    format!("\"{path}\" --launch %command%")
+}
+
 impl Settings {
     pub(super) fn new(
         window: &mut Window,
@@ -70,6 +81,9 @@ impl Settings {
                 .placeholder(DEFAULT_CALIBRATE_MS.to_string())
                 .default_value(general.calibrate_ms.to_string())
         });
+        let launch_command_input = cx.new(|cx| {
+            InputState::new(window, cx).default_value(steam_launch_command())
+        });
         let mut subscribe_input =
             |input: &Entity<InputState>,
              on_apply: fn(&mut Self, &mut Window, &mut Context<Self>)| {
@@ -111,6 +125,7 @@ impl Settings {
             cx,
         );
         Self {
+            root_focus: cx.focus_handle().tab_stop(false),
             appearance_override: None,
             selected_section: initial_section,
             last_charts_visible: general.charts_visible,
@@ -131,6 +146,7 @@ impl Settings {
             forward_host_input,
             forward_port_input,
             calibrate_ms_input,
+            launch_command_input,
             shift_lights,
             gear_display,
         }

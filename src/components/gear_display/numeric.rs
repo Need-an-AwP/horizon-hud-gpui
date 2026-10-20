@@ -2,17 +2,19 @@ use gpui_kit::{
     AnyElement, Context, Entity, FontWeight, Window, div, prelude::*, px, relative,
 };
 use gpui_kit::component::{
-    Sizable, Size,
     input::{Input, InputEvent, InputState},
-    slider::{SliderEvent, SliderState, SliderValue},
+    Sizable, Size,
 };
 use serde::{Deserialize, Serialize};
 
 use crate::app::settings_window::Settings;
 use crate::app::settings_window::colors::Colors;
 use crate::components::shared::color::with_opacity;
+use crate::components::shared::number_field::{
+    NumberField, NumberFieldState, opacity_as_percent, opacity_from_percent,
+};
 use crate::components::shared::settings_ui::{
-    input_apply_control, input_differs, setting_row_with_reset, slider_row,
+    input_apply_control, input_differs, setting_row_with_reset, subscribe_number_field,
 };
 use crate::core::props::{GearValue, HudTelemetryProps};
 use crate::session;
@@ -74,77 +76,76 @@ impl Default for NumericConfig {
 }
 
 pub struct SettingsControls {
-    pub x: Entity<SliderState>,
-    pub y: Entity<SliderState>,
+    pub x: Entity<NumberFieldState>,
+    pub y: Entity<NumberFieldState>,
     pub size: Entity<InputState>,
-    pub opacity: Entity<SliderState>,
-    pub weight: Entity<SliderState>,
+    pub opacity: Entity<NumberFieldState>,
+    pub weight: Entity<NumberFieldState>,
 }
 
 impl SettingsControls {
     pub fn new(cfg: &NumericConfig, window: &mut Window, cx: &mut Context<Settings>) -> Self {
-        let x = cx.new(|_| {
-            SliderState::new()
+        let x = cx.new(|cx| {
+            NumberFieldState::builder()
                 .min(0.0)
                 .max(100.0)
                 .step(0.5)
                 .default_value(cfg.x_ratio * 100.0)
+                .unit("%")
+                .decimals(1)
+                .build(window, cx)
         });
-        let y = cx.new(|_| {
-            SliderState::new()
+        let y = cx.new(|cx| {
+            NumberFieldState::builder()
                 .min(0.0)
                 .max(100.0)
                 .step(0.5)
                 .default_value(cfg.y_ratio * 100.0)
+                .unit("%")
+                .decimals(1)
+                .build(window, cx)
         });
         let size = cx.new(|cx| InputState::new(window, cx).default_value(cfg.size_px.to_string()));
-        let opacity = cx.new(|_| {
-            SliderState::new()
+        let opacity = cx.new(|cx| {
+            NumberFieldState::builder()
                 .min(0.0)
-                .max(1.0)
-                .step(0.05)
-                .default_value(cfg.opacity)
+                .max(100.0)
+                .step(1.0)
+                .default_value(opacity_as_percent(cfg.opacity))
+                .unit("%")
+                .decimals(0)
+                .build(window, cx)
         });
-        let weight = cx.new(|_| {
-            SliderState::new()
-                .max(WEIGHT_MAX)
+        let weight = cx.new(|cx| {
+            NumberFieldState::builder()
                 .min(WEIGHT_MIN)
+                .max(WEIGHT_MAX)
                 .step(10.0)
                 .default_value(cfg.weight)
+                .decimals(0)
+                .build(window, cx)
         });
 
-        for slider in [&x, &y] {
-            cx.subscribe(slider, |this: &mut Settings, _, _: &SliderEvent, cx| {
-                let x_percent = slider_percent(this.gear_display.numeric.x.read(cx).value());
-                let y_percent = slider_percent(this.gear_display.numeric.y.read(cx).value());
-                session::update_gear_display(|settings| {
-                    settings.numeric.x_ratio = (x_percent / 100.0).clamp(0.0, 1.0);
-                    settings.numeric.y_ratio = (y_percent / 100.0).clamp(0.0, 1.0);
-                });
-                cx.notify();
-            })
-            .detach();
-        }
-        cx.subscribe(&weight, |_this, _, event: &SliderEvent, cx| {
-            if let SliderEvent::Change(SliderValue::Single(weight)) = event {
-                let weight = weight.clamp(WEIGHT_MIN, WEIGHT_MAX);
-                session::update_gear_display(|settings| {
-                    settings.numeric.weight = weight;
-                });
-                cx.notify();
-            }
-        })
-        .detach();
-        cx.subscribe(&opacity, |_this, _, event: &SliderEvent, cx| {
-            if let SliderEvent::Change(SliderValue::Single(opacity)) = event {
-                let opacity = opacity.clamp(0.0, 1.0);
-                session::update_gear_display(|settings| {
-                    settings.numeric.opacity = opacity;
-                });
-                cx.notify();
-            }
-        })
-        .detach();
+        subscribe_number_field(&x, cx, |value| {
+            session::update_gear_display(|settings| {
+                settings.numeric.x_ratio = (value / 100.0).clamp(0.0, 1.0);
+            });
+        });
+        subscribe_number_field(&y, cx, |value| {
+            session::update_gear_display(|settings| {
+                settings.numeric.y_ratio = (value / 100.0).clamp(0.0, 1.0);
+            });
+        });
+        subscribe_number_field(&weight, cx, |value| {
+            session::update_gear_display(|settings| {
+                settings.numeric.weight = value.clamp(WEIGHT_MIN, WEIGHT_MAX);
+            });
+        });
+        subscribe_number_field(&opacity, cx, |value| {
+            session::update_gear_display(|settings| {
+                settings.numeric.opacity = opacity_from_percent(value);
+            });
+        });
         cx.subscribe_in(
             &size,
             window,
@@ -166,20 +167,20 @@ impl SettingsControls {
     }
 
     pub fn sync(&self, cfg: &NumericConfig, window: &mut Window, cx: &mut Context<Settings>) {
-        self.x.update(cx, |slider, cx| {
-            slider.set_value(cfg.x_ratio * 100.0, window, cx);
+        self.x.update(cx, |field, cx| {
+            field.set_value(cfg.x_ratio * 100.0, window, cx);
         });
-        self.y.update(cx, |slider, cx| {
-            slider.set_value(cfg.y_ratio * 100.0, window, cx);
+        self.y.update(cx, |field, cx| {
+            field.set_value(cfg.y_ratio * 100.0, window, cx);
         });
         self.size.update(cx, |input, cx| {
             input.set_value(cfg.size_px.to_string(), window, cx);
         });
-        self.opacity.update(cx, |slider, cx| {
-            slider.set_value(cfg.opacity, window, cx);
+        self.opacity.update(cx, |field, cx| {
+            field.set_value(opacity_as_percent(cfg.opacity), window, cx);
         });
-        self.weight.update(cx, |slider, cx| {
-            slider.set_value(cfg.weight, window, cx);
+        self.weight.update(cx, |field, cx| {
+            field.set_value(cfg.weight, window, cx);
         });
     }
 
@@ -229,21 +230,18 @@ pub fn render_settings(view: &Settings, colors: &Colors, cx: &mut Context<Settin
         cx,
         |this, _, cx| this.gear_display.numeric.apply_size(cx),
     );
-
     div()
         .flex()
         .flex_col()
         .gap_3()
-        .child(slider_row(
-            "水平位置",
-            "数字中心相对屏幕宽度的位置；50% 时居中。",
-            "gear-num-x-reset",
-            &view.gear_display.numeric.x,
+        .child(setting_row_with_reset(
             colors,
-            None,
-            "%",
-            1,
+            "水平位置",
+            "百分比，范围 0–100，步进 0.5，默认 50。",
+            "gear-num-x-reset",
+            NumberField::new(&view.gear_display.numeric.x).unit_color(colors.disabled),
             cfg.x_ratio != defaults.x_ratio,
+            None,
             cx,
             |this, window, cx| {
                 reset_field(this, window, cx, |cfg| {
@@ -251,16 +249,14 @@ pub fn render_settings(view: &Settings, colors: &Colors, cx: &mut Context<Settin
                 });
             },
         ))
-        .child(slider_row(
-            "垂直位置",
-            "相对屏幕高度的位置；默认 7.5%。",
-            "gear-num-y-reset",
-            &view.gear_display.numeric.y,
+        .child(setting_row_with_reset(
             colors,
-            None,
-            "%",
-            1,
+            "垂直位置",
+            "百分比，范围 0–100，步进 0.5，默认 7.5。",
+            "gear-num-y-reset",
+            NumberField::new(&view.gear_display.numeric.y).unit_color(colors.disabled),
             cfg.y_ratio != defaults.y_ratio,
+            None,
             cx,
             |this, window, cx| {
                 reset_field(this, window, cx, |cfg| {
@@ -271,7 +267,7 @@ pub fn render_settings(view: &Settings, colors: &Colors, cx: &mut Context<Settin
         .child(setting_row_with_reset(
             colors,
             "字体大小",
-            "Bahnschrift 字号，单位像素；默认 96 px。",
+            "正整数，单位 px，默认 96。",
             "gear-num-size-reset",
             size_control,
             cfg.size_px != defaults.size_px,
@@ -288,16 +284,14 @@ pub fn render_settings(view: &Settings, colors: &Colors, cx: &mut Context<Settin
                 cx.notify();
             },
         ))
-        .child(slider_row(
-            "字重",
-            "沿 Bahnschrift 的可变字重轴，300 最细，700 最粗，步进 10；默认 700。",
-            "gear-num-weight-reset",
-            &view.gear_display.numeric.weight,
+        .child(setting_row_with_reset(
             colors,
-            None,
-            "",
-            0,
+            "字重",
+            "整数，范围 300–700，步进 10，默认 700。越大越粗。",
+            "gear-num-weight-reset",
+            NumberField::new(&view.gear_display.numeric.weight).unit_color(colors.disabled),
             cfg.weight != defaults.weight,
+            None,
             cx,
             |this, window, cx| {
                 reset_field(this, window, cx, |cfg| {
@@ -305,16 +299,14 @@ pub fn render_settings(view: &Settings, colors: &Colors, cx: &mut Context<Settin
                 });
             },
         ))
-        .child(slider_row(
-            "透明度",
-            "整个数字的不透明度，范围 0 到 1；默认 1。",
-            "gear-num-opacity-reset",
-            &view.gear_display.numeric.opacity,
+        .child(setting_row_with_reset(
             colors,
-            None,
-            "",
-            2,
+            "透明度",
+            "百分比，范围 0–100，步进 1，默认 100。",
+            "gear-num-opacity-reset",
+            NumberField::new(&view.gear_display.numeric.opacity).unit_color(colors.disabled),
             cfg.opacity != defaults.opacity,
+            None,
             cx,
             |this, window, cx| {
                 reset_field(this, window, cx, |cfg| {
@@ -335,13 +327,6 @@ fn reset_field(
     let cfg = session::gear_display().numeric;
     this.gear_display.numeric.sync(&cfg, window, cx);
     cx.notify();
-}
-
-fn slider_percent(value: SliderValue) -> f32 {
-    match value {
-        SliderValue::Single(value) => value,
-        SliderValue::Range(start, _) => start,
-    }
 }
 
 fn display_text(gear: GearValue) -> String {

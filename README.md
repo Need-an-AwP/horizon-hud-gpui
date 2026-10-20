@@ -31,12 +31,9 @@ Forza Horizon 的游戏内覆盖 HUD，用于显示换挡灯、档位等信息�
 
 ## 配置随游戏自动启动
 
-在steam中找到极限竞速：地平线6，右键打开属性，在启动选项中填写：
-```bat
-cmd /c start "" "C:\Path\To\horizon-hud-gpui.exe" & %command%
-```
-请修改为自己的horizon-hud文件路径，注意使用英文双引号和反斜杠。最简单的办法，右键你的`horizon-hud-gpui.exe`文件，复制文件地址，或者ctrl+shift+c，即可得到标准的路径。
-完成配置后horizon-hud即可自动跟随游戏启动。
+打开 Horizon HUD，在设置窗口概览页底部找到「随游戏启动」，点复制按钮。到 Steam 中打开极限竞速：地平线 6 的属性，把复制到的整行命令粘贴进启动选项。命令里的程序路径已按当前 exe 填好，请不要修改。
+
+完成配置后，Steam 会启动 Horizon HUD，程序再启动游戏；游戏退出时 Horizon HUD 一并退出。
 
 ## 配置端口转发
 

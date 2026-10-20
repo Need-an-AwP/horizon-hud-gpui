@@ -36,13 +36,9 @@ impl ShiftLightsStyle {
 
     pub fn description(self) -> &'static str {
         match self {
-            Self::Bar => "仿照拉力赛车样式的转速指示灯。",
-            Self::PorscheCup => {
-                "仿照保时捷 911 GT3 Cup (992) 对称环形转速指示灯，由两侧同时向中心点亮。"
-            }
-            Self::Rally1 => {
-                "顶部五段转速灯，无间隙铺满宽度，由两侧向中心按绿、黄、红依次点亮。"
-            }
+            Self::Bar => "贴边灯条。",
+            Self::PorscheCup => "对称圆灯。",
+            Self::Rally1 => "横向五段灯条。",
         }
     }
 

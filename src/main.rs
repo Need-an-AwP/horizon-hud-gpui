@@ -19,6 +19,7 @@ fn main() {
     if !platform::try_become_singleton() {
         return;
     }
+    follow_launch_command();
     session::load_and_apply();
     tray::spawn();
     gpui_kit::application()
@@ -71,4 +72,21 @@ fn main() {
             .unwrap();
             cx.activate(true);
         });
+}
+
+fn follow_launch_command() {
+    let mut args = std::env::args_os().skip(1);
+    match args.next() {
+        Some(flag) if flag == "--launch" => {}
+        _ => return,
+    }
+    let Some(exe) = args.next() else {
+        return;
+    };
+    if let Ok(mut game) = std::process::Command::new(exe).args(args).spawn() {
+        std::thread::spawn(move || {
+            let _ = game.wait();
+            platform::quit_app();
+        });
+    }
 }

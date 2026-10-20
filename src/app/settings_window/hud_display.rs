@@ -27,7 +27,7 @@ impl Settings {
             .child(self.setting_row_with_reset(
                 colors,
                 "仅游戏时显示",
-                "仅在游戏窗口位于前台时显示 HUD；与托盘右键菜单中的开关同步。",
+                "仅在游戏窗口位于前台时显示。",
                 "hud-only-show-in-game-reset",
                 self.switch_control(
                     "hud-only-show-in-game",
@@ -44,7 +44,7 @@ impl Settings {
             .child(self.setting_row_with_reset(
                 colors,
                 "图表显示",
-                "与托盘右键菜单中的图表开关同步。",
+                "显示扭矩、功率和转速曲线。",
                 "hud-charts-visible-reset",
                 self.switch_control(
                     "hud-charts-visible",

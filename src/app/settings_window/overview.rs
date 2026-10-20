@@ -1,7 +1,8 @@
-use gpui_kit::{Context, IntoElement, div, prelude::*, px, rgb};
+use gpui_kit::{ClipboardItem, Context, IntoElement, div, prelude::*, px, rgb};
 use gpui_kit::component::{
     Icon, Sizable, Size, StyledExt,
     button::{Button, ButtonVariants},
+    input::Input,
     tooltip::Tooltip,
 };
 
@@ -116,7 +117,8 @@ impl Settings {
                                     config_path.is_some(),
                                     cx,
                                 )),
-                        ),
+                        )
+                        .child(self.overview_launch_card(colors, cx)),
                 ),
         )
     }
@@ -324,6 +326,54 @@ impl Settings {
             )
     }
 
+    fn overview_launch_card(&self, colors: &Colors, cx: &mut Context<Self>) -> impl IntoElement {
+        div()
+            .w_full()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .p_5()
+            .rounded_lg()
+            .bg(colors.container)
+            .border_1()
+            .border_color(colors.border)
+            .child(div().text_sm().font_medium().child("随游戏启动"))
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(colors.disabled)
+                    .child(
+                        "粘贴到 Steam 游戏属性的启动选项。自动生成路径，请勿修改。",
+                    ),
+            )
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(
+                        Input::new(&self.launch_command_input)
+                            .flex_1()
+                            .min_w(px(0.))
+                            .readonly(true)
+                            .with_size(Size::Medium),
+                    )
+                    .child(
+                        Button::new("overview-copy-launch")
+                            .outline()
+                            .with_size(Size::Medium)
+                            .cursor_pointer()
+                            .tooltip("复制启动命令")
+                            .icon(Icon::empty().path("icons/copy.svg"))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                let command =
+                                    this.launch_command_input.read(cx).value().to_string();
+                                cx.write_to_clipboard(ClipboardItem::new_string(command));
+                            })),
+                    ),
+            )
+    }
+
     fn status_card(
         &self,
         id: &'static str,
@@ -337,6 +387,7 @@ impl Settings {
         colors: &Colors,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let tooltip = format!("前往{}", section.label());
         div()
             .id(id)
             .flex_1()
@@ -349,6 +400,16 @@ impl Settings {
             .bg(colors.container)
             .border_1()
             .border_color(colors.border)
+            .cursor_pointer()
+            .hover(|style| style.bg(colors.background))
+            .active(|style| style.opacity(0.85))
+            .tooltip({
+                let tooltip = tooltip.clone();
+                move |window, cx| Tooltip::new(tooltip.clone()).build(window, cx)
+            })
+            .on_click(cx.listener(move |this, _, window, cx| {
+                this.select_section(section, window, cx);
+            }))
             .child(
                 div()
                     .flex()
@@ -388,24 +449,12 @@ impl Settings {
                             })
                             .child(
                                 div()
-                                    .id((id, section.index()))
                                     .flex()
                                     .items_center()
                                     .justify_center()
                                     .size(px(28.))
                                     .rounded_md()
                                     .bg(colors.background)
-                                    .cursor_pointer()
-                                    .tooltip({
-                                        let tooltip = format!("前往{}", section.label());
-                                        move |window, cx| {
-                                            Tooltip::new(tooltip.clone()).build(window, cx)
-                                        }
-                                    })
-                                    .hover(|style| style.bg(colors.container))
-                                    .on_click(cx.listener(move |this, _, window, cx| {
-                                        this.select_section(section, window, cx);
-                                    }))
                                     .child(
                                         Icon::empty()
                                             .path(icon_path)

@@ -1,7 +1,6 @@
 use gpui_kit::{div, prelude::*, px, relative, Context, Entity, IntoElement, Window};
 use gpui_kit::component::{
     input::{Input, InputEvent, InputState},
-    slider::{SliderEvent, SliderState, SliderValue},
     Sizable, Size,
 };
 use serde::{Deserialize, Serialize};
@@ -13,8 +12,12 @@ use crate::components::shared::layouts::{edge_strip_container, EdgePosition};
 use crate::components::shared::rpm_math::{
     calc_linear_lights, calibrate_segment_fill, is_blink_lit,
 };
+use crate::components::shared::number_field::{
+    NumberField, NumberFieldState, opacity_as_percent, opacity_from_percent,
+};
 use crate::components::shared::settings_ui::{
-    input_apply_control, input_differs, separator, setting_row_with_reset, settings_group, slider_row,
+    input_apply_control, input_differs, separator, setting_row_with_reset, settings_group,
+    subscribe_number_field,
 };
 use crate::core::props::{CalibrationState, HudTelemetryProps};
 
@@ -101,43 +104,43 @@ impl Default for BarConfig {
 }
 
 pub struct SettingsControls {
-    pub lit_opacity: Entity<SliderState>,
-    pub dim_opacity: Entity<SliderState>,
+    pub lit_opacity: Entity<NumberFieldState>,
+    pub dim_opacity: Entity<NumberFieldState>,
     pub offset: Entity<InputState>,
     pub thickness: Entity<InputState>,
     pub gap: Entity<InputState>,
-    pub width: Entity<SliderState>,
-    pub blink_percent: Entity<SliderState>,
-    pub blink_ms: Entity<SliderState>,
+    pub width: Entity<NumberFieldState>,
+    pub blink_percent: Entity<NumberFieldState>,
+    pub blink_ms: Entity<NumberFieldState>,
 }
 
 impl SettingsControls {
     pub fn new(cfg: &BarConfig, window: &mut Window, cx: &mut Context<Settings>) -> Self {
-        let lit_opacity = cx.new(|_| {
-            SliderState::new()
+        let lit_opacity = cx.new(|cx| {
+            NumberFieldState::builder()
                 .min(0.0)
-                .max(1.0)
-                .step(0.05)
-                .default_value(cfg.lit_opacity)
+                .max(100.0)
+                .step(1.0)
+                .default_value(opacity_as_percent(cfg.lit_opacity))
+                .unit("%")
+                .decimals(0)
+                .build(window, cx)
         });
-        let dim_opacity = cx.new(|_| {
-            SliderState::new()
+        let dim_opacity = cx.new(|cx| {
+            NumberFieldState::builder()
                 .min(0.0)
-                .max(1.0)
-                .step(0.05)
-                .default_value(cfg.dim_opacity)
+                .max(100.0)
+                .step(1.0)
+                .default_value(opacity_as_percent(cfg.dim_opacity))
+                .unit("%")
+                .decimals(0)
+                .build(window, cx)
         });
-        subscribe_slider(&lit_opacity, cx, |value| {
-            if value.is_finite() {
-                let value = value.clamp(0.0, 1.0);
-                write_bar(|cfg| cfg.lit_opacity = value);
-            }
+        subscribe_number_field(&lit_opacity, cx, |value| {
+            write_bar(|cfg| cfg.lit_opacity = opacity_from_percent(value));
         });
-        subscribe_slider(&dim_opacity, cx, |value| {
-            if value.is_finite() {
-                let value = value.clamp(0.0, 1.0);
-                write_bar(|cfg| cfg.dim_opacity = value);
-            }
+        subscribe_number_field(&dim_opacity, cx, |value| {
+            write_bar(|cfg| cfg.dim_opacity = opacity_from_percent(value));
         });
 
         let offset = cx.new(|cx| {
@@ -159,46 +162,49 @@ impl SettingsControls {
         subscribe_input(&thickness, window, cx, SettingsControls::apply_thickness);
         subscribe_input(&gap, window, cx, SettingsControls::apply_gap);
 
-        let width = cx.new(|_| {
-            SliderState::new()
+        let width = cx.new(|cx| {
+            NumberFieldState::builder()
                 .min(1.0)
                 .max(100.0)
                 .step(1.0)
                 .default_value(cfg.width_percent as f32)
+                .unit("%")
+                .decimals(0)
+                .build(window, cx)
         });
-        subscribe_slider(&width, cx, |value| {
-            if value.is_finite() {
-                let width = (value as usize).clamp(1, 100);
-                write_bar(|cfg| cfg.width_percent = width);
-            }
+        subscribe_number_field(&width, cx, |value| {
+            let width = (value as usize).clamp(1, 100);
+            write_bar(|cfg| cfg.width_percent = width);
         });
 
-        let blink_percent = cx.new(|_| {
-            SliderState::new()
+        let blink_percent = cx.new(|cx| {
+            NumberFieldState::builder()
                 .min(BLINK_PERCENT_MIN)
                 .max(BLINK_PERCENT_MAX)
                 .step(0.1)
                 .default_value(cfg.blink_percent)
+                .unit("%")
+                .decimals(1)
+                .build(window, cx)
         });
-        subscribe_slider(&blink_percent, cx, |value| {
-            if value.is_finite() {
-                let value = value.clamp(BLINK_PERCENT_MIN, BLINK_PERCENT_MAX);
-                write_bar(|cfg| cfg.blink_percent = value);
-            }
+        subscribe_number_field(&blink_percent, cx, |value| {
+            let value = value.clamp(BLINK_PERCENT_MIN, BLINK_PERCENT_MAX);
+            write_bar(|cfg| cfg.blink_percent = value);
         });
 
-        let blink_ms = cx.new(|_| {
-            SliderState::new()
+        let blink_ms = cx.new(|cx| {
+            NumberFieldState::builder()
                 .min(BLINK_MS_MIN as f32)
                 .max(BLINK_MS_MAX as f32)
                 .step(5.0)
                 .default_value(cfg.blink_ms as f32)
+                .unit("ms")
+                .decimals(0)
+                .build(window, cx)
         });
-        subscribe_slider(&blink_ms, cx, |value| {
-            if value.is_finite() {
-                let blink_ms = (value as usize).clamp(BLINK_MS_MIN, BLINK_MS_MAX);
-                write_bar(|cfg| cfg.blink_ms = blink_ms);
-            }
+        subscribe_number_field(&blink_ms, cx, |value| {
+            let blink_ms = (value as usize).clamp(BLINK_MS_MIN, BLINK_MS_MAX);
+            write_bar(|cfg| cfg.blink_ms = blink_ms);
         });
 
         Self {
@@ -214,11 +220,11 @@ impl SettingsControls {
     }
 
     pub fn sync(&self, cfg: &BarConfig, window: &mut Window, cx: &mut Context<Settings>) {
-        self.lit_opacity.update(cx, |slider, cx| {
-            slider.set_value(cfg.lit_opacity, window, cx);
+        self.lit_opacity.update(cx, |field, cx| {
+            field.set_value(opacity_as_percent(cfg.lit_opacity), window, cx);
         });
-        self.dim_opacity.update(cx, |slider, cx| {
-            slider.set_value(cfg.dim_opacity, window, cx);
+        self.dim_opacity.update(cx, |field, cx| {
+            field.set_value(opacity_as_percent(cfg.dim_opacity), window, cx);
         });
         self.offset.update(cx, |input, cx| {
             input.set_value(cfg.offset_px.to_string(), window, cx);
@@ -229,14 +235,14 @@ impl SettingsControls {
         self.gap.update(cx, |input, cx| {
             input.set_value(cfg.gap_px.to_string(), window, cx);
         });
-        self.width.update(cx, |slider, cx| {
-            slider.set_value(cfg.width_percent as f32, window, cx);
+        self.width.update(cx, |field, cx| {
+            field.set_value(cfg.width_percent as f32, window, cx);
         });
-        self.blink_percent.update(cx, |slider, cx| {
-            slider.set_value(cfg.blink_percent, window, cx);
+        self.blink_percent.update(cx, |field, cx| {
+            field.set_value(cfg.blink_percent, window, cx);
         });
-        self.blink_ms.update(cx, |slider, cx| {
-            slider.set_value(cfg.blink_ms as f32, window, cx);
+        self.blink_ms.update(cx, |field, cx| {
+            field.set_value(cfg.blink_ms as f32, window, cx);
         });
     }
 
@@ -327,11 +333,11 @@ pub fn render_settings(
     let defaults = BarConfig::default();
     let controls = &view.shift_lights.bar;
     let dim_warning = (!crate::core::calibration::shift_lights_calibrated())
-        .then_some("当前处于未校准状态，熄灭透明度可能不可见");
+        .then_some("当前处于未校准状态，熄灭透明度不可见");
     let direction_description = if cfg.position.is_vertical() {
-        "纵向灯条：下→上为默认方向。"
+        "默认自下而上。"
     } else {
-        "横向灯条：左→右为默认方向。"
+        "默认自左向右。"
     };
 
     let position_control = position_control(cfg.position, colors, cx);
@@ -365,7 +371,6 @@ pub fn render_settings(
         cx,
         |this, _, cx| this.shift_lights.bar.apply_offset(cx),
     );
-
     div()
         .flex()
         .flex_col()
@@ -374,12 +379,12 @@ pub fn render_settings(
             settings_group(
                 colors,
                 "样式与位置",
-                "选择转速灯样式、贴边位置，以及转速升高时的点亮方向。",
+                "贴边位置与点亮方向。",
             )
             .child(setting_row_with_reset(
                 colors,
                 "位置",
-                "可放在屏幕顶部、底部、左侧或右侧。",
+                "上、下、左、右。",
                 "bar-position-reset",
                 position_control,
                 cfg.position != defaults.position,
@@ -404,25 +409,23 @@ pub fn render_settings(
             settings_group(
                 colors,
                 "尺寸与布局",
-                "调整灯条占屏幕的比例、厚度、灯格间距，以及离边缘的距离。",
+                "宽度、厚度、间隔与偏移。",
             )
-            .child(slider_row(
-                "整体宽度",
-                "横向灯条的宽度、纵向灯条的高度，占屏幕对应边的百分比；默认 75%。",
-                "bar-width-reset",
-                &controls.width,
+            .child(setting_row_with_reset(
                 colors,
-                None,
-                "%",
-                0,
+                "整体宽度",
+                "百分比，范围 1–100，步进 1，默认 75。",
+                "bar-width-reset",
+                NumberField::new(&controls.width).unit_color(colors.disabled),
                 cfg.width_percent != defaults.width_percent,
+                None,
                 cx,
                 reset_width,
             ))
             .child(setting_row_with_reset(
                 colors,
                 "灯条厚度",
-                "横向灯条的高度、纵向灯条的宽度，单位像素；默认 40 px。",
+                "正整数，单位 px，默认 40。",
                 "bar-thickness-reset",
                 thickness_control,
                 cfg.thickness_px != defaults.thickness_px,
@@ -433,7 +436,7 @@ pub fn render_settings(
             .child(setting_row_with_reset(
                 colors,
                 "灯格间隔",
-                "相邻灯格之间的像素距离；可为 0，默认 8 px。",
+                "非负整数，单位 px，默认 8。",
                 "bar-gap-reset",
                 gap_control,
                 cfg.gap_px != defaults.gap_px,
@@ -444,7 +447,7 @@ pub fn render_settings(
             .child(setting_row_with_reset(
                 colors,
                 "边缘偏移",
-                "0 表示紧贴边缘；正整数表示向屏幕内侧偏移的像素数。",
+                "非负整数，单位 px，默认 0。",
                 "bar-offset-reset",
                 offset_control,
                 cfg.offset_px != defaults.offset_px,
@@ -458,57 +461,49 @@ pub fn render_settings(
             settings_group(
                 colors,
                 "显示效果",
-                "控制灯条闪烁时机与速度，以及亮起与未亮起灯格的透明度。",
+                "闪烁与透明度。",
             )
-            .child(slider_row(
-                "闪烁阈值",
-                "达到校准转速的该百分比后，整条灯条开始闪烁；范围 80% 到 100%，步进 0.1%；默认 95%。",
-                "bar-blink-reset",
-                &controls.blink_percent,
+            .child(setting_row_with_reset(
                 colors,
-                None,
-                "%",
-                1,
+                "闪烁阈值",
+                "百分比，范围 80–100，步进 0.1，默认 95。",
+                "bar-blink-reset",
+                NumberField::new(&controls.blink_percent).unit_color(colors.disabled),
                 cfg.blink_percent != defaults.blink_percent,
+                None,
                 cx,
                 reset_blink_percent,
             ))
-            .child(slider_row(
-                "闪烁速度",
-                "亮灭切换的半周期时长，数值越小闪烁越快；范围 20 到 200 ms，步进 5 ms；默认 80 ms。",
-                "bar-blink-ms-reset",
-                &controls.blink_ms,
+            .child(setting_row_with_reset(
                 colors,
-                None,
-                " ms",
-                0,
+                "闪烁速度",
+                "整数毫秒，范围 20–200，步进 5，默认 80。越小越快。",
+                "bar-blink-ms-reset",
+                NumberField::new(&controls.blink_ms).unit_color(colors.disabled),
                 cfg.blink_ms != defaults.blink_ms,
+                None,
                 cx,
                 reset_blink_ms,
             ))
-            .child(slider_row(
-                "亮起透明度",
-                "亮起的转速灯透明度，范围 0 到 1；默认 0.7。",
-                "bar-lit-opacity-reset",
-                &controls.lit_opacity,
+            .child(setting_row_with_reset(
                 colors,
-                None,
-                "",
-                2,
+                "亮起透明度",
+                "百分比，范围 0–100，步进 1，默认 70。",
+                "bar-lit-opacity-reset",
+                NumberField::new(&controls.lit_opacity).unit_color(colors.disabled),
                 cfg.lit_opacity != defaults.lit_opacity,
+                None,
                 cx,
                 reset_lit_opacity,
             ))
-            .child(slider_row(
-                "熄灭透明度",
-                "未亮起的转速灯透明度，范围 0 到 1。",
-                "bar-dim-opacity-reset",
-                &controls.dim_opacity,
+            .child(setting_row_with_reset(
                 colors,
-                dim_warning,
-                "",
-                2,
+                "熄灭透明度",
+                "百分比，范围 0–100，步进 1，默认 50。",
+                "bar-dim-opacity-reset",
+                NumberField::new(&controls.dim_opacity).unit_color(colors.disabled),
                 cfg.dim_opacity != defaults.dim_opacity,
+                dim_warning,
                 cx,
                 reset_dim_opacity,
             )),
@@ -518,20 +513,6 @@ pub fn render_settings(
 
 fn write_bar(f: impl FnOnce(&mut BarConfig)) {
     crate::session::update_shift_lights(|settings| f(&mut settings.bar));
-}
-
-fn subscribe_slider(
-    slider: &Entity<SliderState>,
-    cx: &mut Context<Settings>,
-    on_value: impl Fn(f32) + 'static,
-) {
-    cx.subscribe(slider, move |_this, _, event: &SliderEvent, cx| {
-        if let SliderEvent::Change(SliderValue::Single(value)) = event {
-            on_value(*value);
-            cx.notify();
-        }
-    })
-    .detach();
 }
 
 fn subscribe_input(
@@ -809,8 +790,8 @@ fn reset_direction(_this: &mut Settings, _window: &mut Window, cx: &mut Context<
 fn reset_width(this: &mut Settings, window: &mut Window, cx: &mut Context<Settings>) {
     let value = BarConfig::default().width_percent;
     write_bar(|cfg| cfg.width_percent = value);
-    this.shift_lights.bar.width.update(cx, |slider, cx| {
-        slider.set_value(value as f32, window, cx);
+    this.shift_lights.bar.width.update(cx, |field, cx| {
+        field.set_value(value as f32, window, cx);
     });
     cx.notify();
 }
@@ -845,20 +826,17 @@ fn reset_offset(this: &mut Settings, window: &mut Window, cx: &mut Context<Setti
 fn reset_blink_percent(this: &mut Settings, window: &mut Window, cx: &mut Context<Settings>) {
     let value = BarConfig::default().blink_percent;
     write_bar(|cfg| cfg.blink_percent = value);
-    this.shift_lights
-        .bar
-        .blink_percent
-        .update(cx, |slider, cx| {
-            slider.set_value(value, window, cx);
-        });
+    this.shift_lights.bar.blink_percent.update(cx, |field, cx| {
+        field.set_value(value, window, cx);
+    });
     cx.notify();
 }
 
 fn reset_blink_ms(this: &mut Settings, window: &mut Window, cx: &mut Context<Settings>) {
     let value = BarConfig::default().blink_ms;
     write_bar(|cfg| cfg.blink_ms = value);
-    this.shift_lights.bar.blink_ms.update(cx, |slider, cx| {
-        slider.set_value(value as f32, window, cx);
+    this.shift_lights.bar.blink_ms.update(cx, |field, cx| {
+        field.set_value(value as f32, window, cx);
     });
     cx.notify();
 }
@@ -866,23 +844,17 @@ fn reset_blink_ms(this: &mut Settings, window: &mut Window, cx: &mut Context<Set
 fn reset_lit_opacity(this: &mut Settings, window: &mut Window, cx: &mut Context<Settings>) {
     let value = BarConfig::default().lit_opacity;
     write_bar(|cfg| cfg.lit_opacity = value);
-    this.shift_lights
-        .bar
-        .lit_opacity
-        .update(cx, |slider, cx| {
-            slider.set_value(value, window, cx);
-        });
+    this.shift_lights.bar.lit_opacity.update(cx, |field, cx| {
+        field.set_value(opacity_as_percent(value), window, cx);
+    });
     cx.notify();
 }
 
 fn reset_dim_opacity(this: &mut Settings, window: &mut Window, cx: &mut Context<Settings>) {
     let value = BarConfig::default().dim_opacity;
     write_bar(|cfg| cfg.dim_opacity = value);
-    this.shift_lights
-        .bar
-        .dim_opacity
-        .update(cx, |slider, cx| {
-            slider.set_value(value, window, cx);
-        });
+    this.shift_lights.bar.dim_opacity.update(cx, |field, cx| {
+        field.set_value(opacity_as_percent(value), window, cx);
+    });
     cx.notify();
 }

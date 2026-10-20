@@ -40,7 +40,7 @@ impl Settings {
                         div()
                             .text_sm()
                             .text_color(colors.disabled)
-                            .child("查看应用信息、版本与支持资源。"),
+                            .child("应用信息与支持资源。"),
                     ),
             )
             .child(

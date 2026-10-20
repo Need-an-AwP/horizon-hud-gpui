@@ -3,11 +3,11 @@ use gpui_kit::component::{
     button::{Button, ButtonVariants},
     input::InputState,
     Icon, IconName, Sizable, Size, StyledExt,
-    slider::{Slider, SliderState, SliderValue},
 };
 
 use crate::app::settings_window::colors::Colors;
 use crate::app::settings_window::Settings;
+use crate::components::shared::number_field::{NumberFieldEvent, NumberFieldState};
 
 pub fn separator(colors: &Colors) -> gpui_kit::Div {
     div().w_full().h(px(1.)).bg(colors.border)
@@ -174,76 +174,17 @@ pub fn setting_row_with_reset(
         .child(div().flex_none().child(control))
 }
 
-fn slider_value_width(suffix: &str, decimal_places: usize) -> gpui_kit::Pixels {
-    match (suffix, decimal_places) {
-        ("%", 0) => px(44.),
-        ("%", _) => px(58.),
-        (_, 0) => px(44.),
-        _ => px(48.),
-    }
-}
-
-pub fn slider_row(
-    title: &'static str,
-    description: &'static str,
-    reset_id: &'static str,
-    slider: &Entity<SliderState>,
-    colors: &Colors,
-    warning: Option<&'static str>,
-    suffix: &'static str,
-    decimal_places: usize,
-    show_reset: bool,
+pub fn subscribe_number_field(
+    field: &Entity<NumberFieldState>,
     cx: &mut Context<Settings>,
-    on_reset: impl Fn(&mut Settings, &mut Window, &mut Context<Settings>) + 'static,
-) -> gpui_kit::Div {
-    let value = match slider.read(cx).value() {
-        SliderValue::Single(value) => value,
-        SliderValue::Range(start, _) => start,
-    };
-    let value_label = format!("{value:.prec$}{suffix}", prec = decimal_places);
-    div()
-        .flex()
-        .items_center()
-        .justify_between()
-        .gap_4()
-        .p_4()
-        .border_1()
-        .border_color(colors.border)
-        .rounded_lg()
-        .bg(colors.background)
-        .child(
-            div()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .min_w_0()
-                .child(title_with_reset(title, reset_id, show_reset, cx, on_reset))
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(colors.disabled)
-                        .child(description),
-                )
-                .when_some(warning, |el, text| el.child(warning_hint(colors, text))),
-        )
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .gap_3()
-                .w(px(232.))
-                .child(Slider::new(slider).horizontal())
-                .child(
-                    div()
-                        .flex_none()
-                        .w(slider_value_width(suffix, decimal_places))
-                        .whitespace_nowrap()
-                        .text_sm()
-                        .text_right()
-                        .text_color(colors.disabled)
-                        .child(value_label),
-                ),
-        )
+    on_change: impl Fn(f32) + 'static,
+) {
+    cx.subscribe(field, move |_, _, event: &NumberFieldEvent, cx| {
+        let NumberFieldEvent::Change(value) = event;
+        on_change(*value);
+        cx.notify();
+    })
+    .detach();
 }
 
 pub fn switch_control<T>(
